@@ -50,9 +50,10 @@ add_library(YapNotifier SHARED
   src/hooks.cpp
   src/overlay.cpp
   src/teamspeak.cpp
+  src/update.cpp
   YapNotifier.rc)  # FX_ASI_BUILD resources: FiveM refuses the .asi without them
 target_include_directories(YapNotifier PRIVATE shared)
-target_link_libraries(YapNotifier PRIVATE minhook imgui ws2_32)
+target_link_libraries(YapNotifier PRIVATE minhook imgui ws2_32 winhttp bcrypt)
 target_compile_definitions(YapNotifier PRIVATE ${YAP_COMMON_DEFS})
 target_compile_options(YapNotifier PRIVATE ${YAP_COMMON_OPTS})
 set_target_properties(YapNotifier PROPERTIES PREFIX "" SUFFIX ".asi")
@@ -88,9 +89,9 @@ add_custom_target(ts3_package ALL
 
 # --- Tests --------------------------------------------------------------------
 enable_testing()
-add_executable(test_parser tests/test_parser.cpp src/teamspeak.cpp src/log.cpp)
+add_executable(test_parser tests/test_parser.cpp src/teamspeak.cpp src/update.cpp src/log.cpp)
 target_include_directories(test_parser PRIVATE src shared)
-target_link_libraries(test_parser PRIVATE ws2_32)
+target_link_libraries(test_parser PRIVATE ws2_32 winhttp bcrypt)
 target_compile_definitions(test_parser PRIVATE ${YAP_COMMON_DEFS})
 target_compile_options(test_parser PRIVATE ${YAP_COMMON_OPTS})
 add_test(NAME parser COMMAND test_parser)

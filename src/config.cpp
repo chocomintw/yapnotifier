@@ -45,6 +45,7 @@ namespace yap::config {
 Config load(const std::wstring& ini) {
     Config c;
     c.port = read_num(ini, L"port", c.port);
+    c.auto_update = read_num(ini, L"auto_update", c.auto_update ? 1 : 0) != 0;
     c.menu_key = read_num(ini, L"menu_key", c.menu_key);
     c.pos_x = read_num(ini, L"pos_x", c.pos_x);
     c.pos_y = read_num(ini, L"pos_y", c.pos_y);
@@ -55,6 +56,7 @@ Config load(const std::wstring& ini) {
 
 void save(const Config& c, const std::wstring& ini) {
     write_num(ini, L"port", c.port);
+    write_num(ini, L"auto_update", c.auto_update ? 1 : 0);
     write_num(ini, L"menu_key", c.menu_key);
     write_num(ini, L"pos_x", c.pos_x);
     write_num(ini, L"pos_y", c.pos_y);

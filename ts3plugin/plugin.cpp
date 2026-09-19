@@ -13,6 +13,7 @@
 #include "teamspeak/public_definitions.h"
 #include "teamspeak/public_errors.h"
 #include "ts3_functions.h"
+#include "version.h"
 #include "yap_protocol.h"
 
 #define PLUGIN_API_VERSION 26
@@ -57,7 +58,7 @@ bool is_own_client(uint64 schid, anyID clid) {
 
 // --- required exports ---------------------------------------------------------
 EXPORT const char* ts3plugin_name() { return "YapNotifier"; }
-EXPORT const char* ts3plugin_version() { return "0.1.0"; }
+EXPORT const char* ts3plugin_version() { return YAP_VERSION; }
 EXPORT int ts3plugin_apiVersion() { return PLUGIN_API_VERSION; }
 EXPORT const char* ts3plugin_author() { return "YapNotifier"; }
 EXPORT const char* ts3plugin_description() {

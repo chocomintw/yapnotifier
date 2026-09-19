@@ -7,14 +7,16 @@
 #include "log.h"
 #include "overlay.h"
 #include "teamspeak.h"
+#include "update.h"
+#include "version.h"
 
 namespace {
 HMODULE g_module = nullptr;
 
-std::filesystem::path module_dir() {
+std::filesystem::path module_path() {
     wchar_t buf[MAX_PATH];
     GetModuleFileNameW(g_module, buf, MAX_PATH);
-    return std::filesystem::path(buf).parent_path();
+    return buf;
 }
 
 void eject() {
@@ -27,9 +29,11 @@ void eject() {
 }
 
 DWORD WINAPI init_thread(LPVOID) {
-    const auto dir = module_dir();
+    const auto self = module_path();
+    const auto dir = self.parent_path();
     yap::log::open((dir / L"YapNotifier.log").wstring());
-    yap::log::info("loading (pid {})", GetCurrentProcessId());
+    yap::log::info("loading v" YAP_VERSION " (pid {})", GetCurrentProcessId());
+    yap::update::cleanup_previous(self);
 
     const auto ini = (dir / L"YapNotifier.ini").wstring();
     const yap::Config cfg = yap::config::load(ini);
@@ -43,6 +47,9 @@ DWORD WINAPI init_thread(LPVOID) {
     }
     yap::ts::start();
     yap::log::info("ready");
+
+    // Network I/O after the overlay is live so a slow GitHub never delays the hooks.
+    yap::update::check_and_install(self, cfg.auto_update);
 
     // Dev convenience: END unloads the plugin so a rebuilt .asi can be dropped
     // in without restarting the game.

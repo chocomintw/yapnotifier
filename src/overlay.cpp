@@ -2,6 +2,8 @@
 
 #include "log.h"
 #include "teamspeak.h"
+#include "update.h"
+#include "version.h"
 
 #include <d3d11.h>
 #include <dxgi.h>
@@ -109,12 +111,33 @@ void draw_talkers() {
     ImGui::End();
 }
 
+// Update/updated banner: top-centre for 20 s after it first appears, then only in the menu.
+void draw_notice() {
+    auto notice = update::notice();
+    if (notice->empty()) return;
+    static ULONGLONG first_seen = 0;
+    if (!first_seen) first_seen = GetTickCount64();
+    if (GetTickCount64() - first_seen > 20000) return;
+
+    const ImVec2 display = ImGui::GetIO().DisplaySize;
+    ImGui::SetNextWindowPos({display.x * 0.5f, 24.f}, ImGuiCond_Always, {0.5f, 0.f});
+    ImGui::SetNextWindowBgAlpha(0.85f);
+    ImGui::Begin("##yap_notice", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
+                     ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
+                     ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav);
+    ImGui::TextColored({1.f, 0.85f, 0.3f, 1.f}, "%s", notice->c_str());
+    ImGui::End();
+}
+
 void draw_menu() {
-    ImGui::Begin("YapNotifier", &g_menu_open, ImGuiWindowFlags_AlwaysAutoResize);
+    ImGui::Begin("YapNotifier v" YAP_VERSION, &g_menu_open, ImGuiWindowFlags_AlwaysAutoResize);
     auto snap = ts::snapshot();
     ImGui::TextDisabled(snap->connected ? "TS3 plugin: connected" : "TS3 plugin: not connected (is the YapNotifier plugin enabled in TeamSpeak?)");
+    if (auto notice = update::notice(); !notice->empty()) ImGui::TextColored({1.f, 0.85f, 0.3f, 1.f}, "%s", notice->c_str());
     ImGui::Separator();
     ImGui::InputInt("UDP port", &g_cfg.port);
+    ImGui::Checkbox("Auto-update on launch", &g_cfg.auto_update);
     ImGui::Separator();
     ImGui::SliderFloat("X", &g_cfg.pos_x, 0.f, ImGui::GetIO().DisplaySize.x);
     ImGui::SliderFloat("Y", &g_cfg.pos_y, 0.f, ImGui::GetIO().DisplaySize.y);
@@ -160,6 +183,7 @@ void render(IDXGISwapChain* sc) {
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
     draw_talkers();
+    draw_notice();
     if (g_menu_open) draw_menu();
     ImGui::Render();
     g_ctx->OMSetRenderTargets(1, g_rtv.GetAddressOf(), nullptr);

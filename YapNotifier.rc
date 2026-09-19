@@ -26,9 +26,11 @@ FX_ASI_BUILD 3889 BEGIN "\0" END
 // Version resource: an unsigned binary with no version info weighs against it in Defender /
 // SmartScreen scoring, and gives a player who right-clicks the file nothing to look at.
 // Literal numbers rather than winver.h names so the .rc never needs an include path.
+#include "version.h"
+
 1 VERSIONINFO
-FILEVERSION    0,1,0,0
-PRODUCTVERSION 0,1,0,0
+FILEVERSION    YAP_VERSION_NUM
+PRODUCTVERSION YAP_VERSION_NUM
 FILEFLAGSMASK  0x3fL
 FILEFLAGS      0x0L
 FILEOS         0x40004L
@@ -40,11 +42,11 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "FileDescription",  "YapNotifier - TeamSpeak 3 who's-talking overlay for FiveM"
-            VALUE "FileVersion",      "0.1.0.0"
+            VALUE "FileVersion",      YAP_VERSION
             VALUE "InternalName",     "YapNotifier"
             VALUE "OriginalFilename", "YapNotifier.asi"
             VALUE "ProductName",      "YapNotifier"
-            VALUE "ProductVersion",   "0.1.0.0"
+            VALUE "ProductVersion",   YAP_VERSION
         END
     END
     BLOCK "VarFileInfo"

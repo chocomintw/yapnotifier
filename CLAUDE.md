@@ -23,7 +23,9 @@ ctest --test-dir build -C Release        # runs test_parser
 
 Outputs: `build/Release/YapNotifier.asi`, `build/YapNotifier.ts3_plugin`. With `YAPNOTIFIER_DEPLOY_DIR` set the `.asi` is copied there after every build. Everything compiles with `/W4 /permissive-`; keep it warning-free.
 
-`YapNotifier.rc` carries the `FX_ASI_BUILD` resources FiveM requires (one per game build; add a line when a new build ships or the plugin silently refuses to load) plus version info. Bump `FILEVERSION` there, `ts3plugin_version()` in `ts3plugin/plugin.cpp`, and `ts3plugin/package.ini` together.
+`YapNotifier.rc` carries the `FX_ASI_BUILD` resources FiveM requires (one per game build; add a line when a new build ships or the plugin silently refuses to load) plus version info.
+
+**Releasing:** bump `YAP_VERSION` / `YAP_VERSION_NUM` in `shared/version.h` (feeds the `.rc`, the TS3 plugin, and the updater) and `Version` in `ts3plugin/package.ini` (CI fails if they differ), then push a `v<version>` tag. The workflow builds, tests, and publishes a GitHub Release with `YapNotifier.asi` + `YapNotifier.ts3_plugin`; installed copies self-update from it.
 
 Only the datagram parser has a host-side test; hooks, overlay and the TS3 plugin can only be verified in-game / in-client. Runtime log: `<plugins>/YapNotifier.log`; settings: `<plugins>/YapNotifier.ini`. In-game: **INSERT** opens the config menu, **END** ejects the plugin (dev hot-reload).
 
@@ -37,5 +39,7 @@ Data flows one way: TeamSpeak -> plugin -> UDP -> `.asi` listener thread -> atom
   - *Init/eject* (`src/main.cpp`): spawned from `DllMain` (never work under the loader lock). Installs hooks, starts the listener, polls END, tears down in reverse order.
   - *Render* (`src/hooks.cpp` -> `src/overlay.cpp`): the game's thread, entered via MinHook detours on `IDXGISwapChain::Present` (slot 8) / `::ResizeBuffers` (slot 13). Vtable addresses come from a throwaway swapchain on a hidden window — every swapchain in the process shares dxgi's vtable, so no pattern scanning. `overlay` lazily inits ImGui from the real swapchain, subclasses the game window's WndProc, and must release the backbuffer RTV in `on_resize()` *before* the original ResizeBuffers runs.
   - *Listener* (`src/teamspeak.cpp`): binds the UDP port, parses datagrams, publishes immutable `Snapshot`s through one `std::atomic<std::shared_ptr<const Snapshot>>`. The render thread only ever calls `ts::snapshot()`.
+
+- **Updater** (`src/update.cpp`, runs on the init thread after hooks are live): `GET api.github.com/repos/chocomintw/yapnotifier/releases/latest` via WinHTTP, compares `tag_name` to `YAP_VERSION`, downloads the `YapNotifier.asi` asset, verifies it against the asset `digest` (SHA-256 via BCrypt), then renames the running `.asi` to `.asi.old` and drops the new file in place — Windows allows renaming a mapped DLL, so the swap is immediate and takes effect on the next FiveM start. `.asi.old` is deleted on the following launch. `auto_update=0` in the INI checks but does not install. Status surfaces through `update::notice()` as a 20 s banner and a line in the menu.
 
 Failure policy everywhere: log and go dormant, never crash the game or the TS client.

@@ -12,6 +12,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check package.ini version matches version.h
+        shell: pwsh
+        run: |
+          $h = (Select-String -Path shared/version.h -Pattern '#define YAP_VERSION\s+"([^"]+)"').Matches[0].Groups[1].Value
+          $p = (Select-String -Path ts3plugin/package.ini -Pattern '^Version\s*=\s*(\S+)').Matches[0].Groups[1].Value
+          if ($h -ne $p) { throw "version.h says $h but ts3plugin/package.ini says $p" }
+          "version $h"
+
       - name: Configure
         run: cmake -S . -B build -A x64
 
