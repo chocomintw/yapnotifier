@@ -114,7 +114,7 @@ bool resolve_vtable(void*& present, void*& resize_buffers) {
 
 namespace yap::hooks {
 
-bool install(bool safe_mode) {
+bool install(bool safe_mode, bool hook_resize) {
     g_safe_mode = safe_mode;
     if (MH_STATUS s = MH_Initialize(); s != MH_OK) {
         log::error("hooks: MH_Initialize: {}", MH_StatusToString(s));
@@ -141,7 +141,8 @@ bool install(bool safe_mode) {
         MH_Uninitialize();
         return false;
     }
-    if (!safe_mode &&
+    const bool want_resize = !safe_mode && hook_resize;
+    if (want_resize &&
         !ok("MH_CreateHook(ResizeBuffers)", MH_CreateHook(resize, &hk_resize_buffers, reinterpret_cast<void**>(&g_resize_orig)))) {
         MH_Uninitialize();
         return false;
@@ -151,7 +152,8 @@ bool install(bool safe_mode) {
         return false;
     }
     g_installed = true;
-    log::info("hooks: installed{}", safe_mode ? " (SAFE MODE: pass-through, no overlay)" : "");
+    log::info("hooks: installed{}{}", safe_mode ? " (SAFE MODE: pass-through, no overlay)" : "",
+              (!safe_mode && !hook_resize) ? " (ResizeBuffers hook OFF)" : "");
     return true;
 }
 

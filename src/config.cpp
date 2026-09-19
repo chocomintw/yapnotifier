@@ -47,6 +47,7 @@ Config load(const std::wstring& ini) {
     c.port = read_num(ini, L"port", c.port);
     c.auto_update = read_num(ini, L"auto_update", c.auto_update ? 1 : 0) != 0;
     c.safe_mode = read_num(ini, L"safe_mode", c.safe_mode ? 1 : 0) != 0;
+    c.hook_resize = read_num(ini, L"hook_resize", c.hook_resize ? 1 : 0) != 0;
     c.menu_key = read_num(ini, L"menu_key", c.menu_key);
     c.pos_x = read_num(ini, L"pos_x", c.pos_x);
     c.pos_y = read_num(ini, L"pos_y", c.pos_y);
@@ -59,6 +60,7 @@ void save(const Config& c, const std::wstring& ini) {
     write_num(ini, L"port", c.port);
     write_num(ini, L"auto_update", c.auto_update ? 1 : 0);
     write_num(ini, L"safe_mode", c.safe_mode ? 1 : 0);
+    write_num(ini, L"hook_resize", c.hook_resize ? 1 : 0);
     write_num(ini, L"menu_key", c.menu_key);
     write_num(ini, L"pos_x", c.pos_x);
     write_num(ini, L"pos_y", c.pos_y);

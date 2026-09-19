@@ -40,7 +40,7 @@ DWORD WINAPI init_thread(LPVOID) {
     yap::overlay::set_config(cfg, ini);
     yap::ts::configure(cfg.port);
 
-    if (!yap::hooks::install(cfg.safe_mode)) {
+    if (!yap::hooks::install(cfg.safe_mode, cfg.hook_resize)) {
         // Stay loaded but dormant; never take the game down with us.
         yap::log::error("hook install failed; plugin dormant");
         return 0;

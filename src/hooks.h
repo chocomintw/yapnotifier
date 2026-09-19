@@ -8,7 +8,7 @@ namespace yap::hooks {
 // safe_mode (INI diagnostic): hook Present only and pass every call straight
 // through — no overlay, no ResizeBuffers hook. Used to tell an anti-cheat /
 // inline-hook crash apart from a bug in our own render path.
-bool install(bool safe_mode);
+bool install(bool safe_mode, bool hook_resize);
 
 // Disables the hooks, waits for in-flight calls to leave our detours, and
 // tears MinHook down. Safe to call even if install() failed.
