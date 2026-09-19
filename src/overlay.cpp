@@ -10,7 +10,6 @@
 #include <imgui.h>
 #include <imgui_impl_dx11.h>
 #include <imgui_impl_win32.h>
-#include <imgui_stdlib.h>
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND, UINT, WPARAM, LPARAM);
 
@@ -87,9 +86,7 @@ void poll_menu_key() {
 
 void draw_talkers() {
     auto snap = ts::snapshot();
-    bool any = false;
-    for (const auto& c : snap->clients) any |= c.talking;
-    if (!any) return;
+    if (snap->talking.empty()) return;
 
     ImGui::SetNextWindowPos({g_cfg.pos_x, g_cfg.pos_y}, ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(g_cfg.opacity);
@@ -99,8 +96,7 @@ void draw_talkers() {
                      ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav);
     ImGui::SetWindowFontScale(g_cfg.scale);
     const float r = ImGui::GetTextLineHeight() * 0.3f;
-    for (const auto& c : snap->clients) {
-        if (!c.talking) continue;
+    for (const auto& c : snap->talking) {
         ImVec2 p = ImGui::GetCursorScreenPos();
         ImGui::GetWindowDrawList()->AddCircleFilled(
             {p.x + r, p.y + ImGui::GetTextLineHeight() * 0.5f}, r, IM_COL32(80, 220, 80, 255));
@@ -114,11 +110,9 @@ void draw_talkers() {
 void draw_menu() {
     ImGui::Begin("YapNotifier", &g_menu_open, ImGuiWindowFlags_AlwaysAutoResize);
     auto snap = ts::snapshot();
-    ImGui::TextDisabled(snap->connected ? "TeamSpeak: connected" : "TeamSpeak: not connected");
+    ImGui::TextDisabled(snap->connected ? "TS3 plugin: connected" : "TS3 plugin: not connected (is the YapNotifier plugin enabled in TeamSpeak?)");
     ImGui::Separator();
-    ImGui::InputText("ClientQuery API key", &g_cfg.api_key, ImGuiInputTextFlags_Password);
-    ImGui::InputText("Host", &g_cfg.host);
-    ImGui::InputInt("Port", &g_cfg.port);
+    ImGui::InputInt("UDP port", &g_cfg.port);
     ImGui::Separator();
     ImGui::SliderFloat("X", &g_cfg.pos_x, 0.f, ImGui::GetIO().DisplaySize.x);
     ImGui::SliderFloat("Y", &g_cfg.pos_y, 0.f, ImGui::GetIO().DisplaySize.y);
@@ -127,7 +121,7 @@ void draw_menu() {
     ImGui::Separator();
     if (ImGui::Button("Save")) {
         config::save(g_cfg, g_ini);
-        ts::configure(g_cfg.host, g_cfg.port, g_cfg.api_key);
+        ts::configure(g_cfg.port);
         log::info("overlay: config saved");
     }
     ImGui::SameLine();

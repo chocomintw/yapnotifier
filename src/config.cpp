@@ -44,8 +44,6 @@ namespace yap::config {
 
 Config load(const std::wstring& ini) {
     Config c;
-    c.api_key = read_str(ini, L"api_key", c.api_key);
-    c.host = read_str(ini, L"host", c.host);
     c.port = read_num(ini, L"port", c.port);
     c.menu_key = read_num(ini, L"menu_key", c.menu_key);
     c.pos_x = read_num(ini, L"pos_x", c.pos_x);
@@ -56,8 +54,6 @@ Config load(const std::wstring& ini) {
 }
 
 void save(const Config& c, const std::wstring& ini) {
-    write_str(ini, L"api_key", c.api_key);
-    write_str(ini, L"host", c.host);
     write_num(ini, L"port", c.port);
     write_num(ini, L"menu_key", c.menu_key);
     write_num(ini, L"pos_x", c.pos_x);

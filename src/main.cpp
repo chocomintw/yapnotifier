@@ -34,7 +34,7 @@ DWORD WINAPI init_thread(LPVOID) {
     const auto ini = (dir / L"YapNotifier.ini").wstring();
     const yap::Config cfg = yap::config::load(ini);
     yap::overlay::set_config(cfg, ini);
-    yap::ts::configure(cfg.host, cfg.port, cfg.api_key);
+    yap::ts::configure(cfg.port);
 
     if (!yap::hooks::install()) {
         // Stay loaded but dormant; never take the game down with us.

@@ -1,74 +1,90 @@
 # YapNotifier — Design
 
-TeamSpeak 3 "who's talking" overlay for FiveM, shipped as an x64 `.asi` plugin loaded by FiveM's ASI loader.
+TeamSpeak 3 "who's talking" overlay for FiveM. Two artifacts: an x64 `.asi` plugin loaded by FiveM's ASI loader, and a TeamSpeak 3 client plugin (`.ts3_plugin`) that feeds it.
 
 ## Scope
 
-**In:** ImGui overlay listing currently-talking TeamSpeak users, fed by the TS3 ClientQuery plugin. Config menu on a hotkey. File logging. Clean dev-time eject.
+**In:** ImGui overlay listing currently-talking TeamSpeak users. TS3 plugin as the data source. Config menu on a hotkey. File logging. Clean dev-time eject.
 
-**Out (this pass):** 3D positioning above player heads. Any TS ↔ game-player mapping.
+**Out (this pass):** 3D positioning above player heads. Any TS <-> game-player mapping. ClientQuery (replaced by the plugin, 2026-09-19). Linux/macOS plugin builds. Code signing.
 
 ## Build
 
-- CMake ≥ 3.24, MSVC, x64, C++20 (needed for `std::atomic<std::shared_ptr>`).
-- Deps via FetchContent: MinHook (own CMakeLists), Dear ImGui (custom static-lib target: core + `imgui_impl_win32` + `imgui_impl_dx11`).
-- Output `YapNotifier.asi` (`SUFFIX ".asi"`). Optional `YAPNOTIFIER_DEPLOY_DIR` cache var copies the build to FiveM's `plugins/` post-build.
+- CMake >= 3.24, MSVC, x64, C++20 (needed for `std::atomic<std::shared_ptr>`).
+- Deps via FetchContent: MinHook, Dear ImGui (custom static-lib target), TS3 plugin SDK headers (pinned commit, API 26).
+- Static CRT on every binary.
+- Targets: `YapNotifier.asi`; `yapnotifier_ts3_win64.dll` zipped with `package.ini` into `YapNotifier.ts3_plugin`; `test_parser` (CTest).
+- `YapNotifier.rc` carries the `FX_ASI_BUILD` resources FiveM requires (one per game build) and version info.
+- Optional `YAPNOTIFIER_DEPLOY_DIR` copies the `.asi` to FiveM's `plugins/` post-build.
 
 ## Layout
 
 ```
 CMakeLists.txt
-src/
-  main.cpp          DllMain, init thread, END-key eject
-  log.h/.cpp        file logger → <plugins>/YapNotifier.log
-  config.h/.cpp     INI load/save via GetPrivateProfileString / WritePrivateProfileString
-  hooks.h/.cpp      MinHook init, dummy-swapchain vtable lookup, Present / ResizeBuffers / WndProc
-  overlay.h/.cpp    ImGui lifecycle + drawing
-  teamspeak.h/.cpp  ClientQuery client thread + snapshot publisher (stubbed protocol)
+YapNotifier.rc
+shared/yap_protocol.h   wire format + port, included by both sides
+src/                    .asi
+  main.cpp              DllMain, init thread, END-key eject
+  log.h/.cpp            file logger -> <plugins>/YapNotifier.log
+  config.h/.cpp         INI via GetPrivateProfileString / WritePrivateProfileString
+  hooks.h/.cpp          MinHook init, dummy-swapchain vtable lookup, Present / ResizeBuffers
+  overlay.h/.cpp        ImGui lifecycle, WndProc subclass, drawing
+  teamspeak.h/.cpp      UDP listener + datagram parser + snapshot publisher
+ts3plugin/
+  plugin.cpp            TS3 plugin: talk events -> UDP datagrams
+  package.ini           .ts3_plugin manifest
+tests/test_parser.cpp   datagram parser check
 ```
 
-No `include/` — nothing outside the DLL consumes these headers.
+## Wire protocol (plugin -> .asi)
 
-## Lifecycle
+UDP to `127.0.0.1:25640`. Each datagram is the **complete** current talking list:
+
+```
+YAP1\n
+<clid>\t<nickname>\n   (zero or more)
+```
+
+Sent on every change and once per second as a heartbeat. The `.asi` treats >3 s of silence as "plugin gone" and clears the overlay. No handshake, no auth (loopback only; payload is public voice-server state). Chosen over named pipes / shared memory because it has no connection lifecycle on either side.
+
+## TS3 plugin
+
+Exports the required `ts3plugin_*` symbols (API 26). `onTalkStatusChangeEvent` adds/removes `(server, clid)` in a mutex-protected map and resolves the nickname via `getClientVariableAsString(CLIENT_NICKNAME)`. Own client is excluded. Move/kick events with `newChannelID == 0` and `STATUS_DISCONNECTED` remove clients that will never emit "not talking". A heartbeat thread resends state every 1 s. `shutdown()` sends an empty list so the overlay clears immediately.
+
+## .asi lifecycle
 
 1. `DllMain(DLL_PROCESS_ATTACH)`: `DisableThreadLibraryCalls`, spawn init thread, return. Never block under loader lock.
-2. Init thread: open log → load config → `MH_Initialize` → resolve vtable → create+enable hooks → start TS thread → loop polling END key for eject.
-3. Eject: `MH_DisableHook(MH_ALL_HOOKS)` → sleep ~100 ms (let in-flight Present leave the trampoline) → restore WndProc → ImGui shutdown → stop TS thread → `MH_Uninitialize` → `FreeLibraryAndExitThread`.
+2. Init thread: open log -> load config -> `MH_Initialize` -> resolve vtable -> create+enable hooks -> start listener thread -> poll END key for eject.
+3. Eject: `MH_DisableHook(MH_ALL_HOOKS)` -> drain in-flight detours (bounded 1 s) -> `MH_Uninitialize` -> restore WndProc + ImGui shutdown -> stop listener -> `FreeLibraryAndExitThread`.
 
 ## Hooking
 
-**Vtable acquisition — dummy swapchain.** Create a throwaway D3D11 device + windowed 1×1 swapchain on the game HWND, read `vtable[8]` (Present) and `vtable[13]` (ResizeBuffers), release, hook those addresses. All `IDXGISwapChain*` instances from the same `dxgi.dll` share the vtable, so the game's swapchain hits our detour. Chains correctly with other overlays (Steam/Discord/FiveM) already hooked in.
+**Vtable acquisition — dummy swapchain.** Create a throwaway D3D11 device + windowed 1x1 swapchain on our own hidden window, read `vtable[8]` (Present) and `vtable[13]` (ResizeBuffers), release, hook those addresses. All `IDXGISwapChain*` instances from the same `dxgi.dll` share the vtable. Chains with other overlays already hooked in.
 
-Rejected: pattern scanning `dxgi.dll`/`GTA5.exe` (rots on every Windows/game update); locating the game's swapchain object (same fragility, and we don't need the object — Present hands us `this`).
+Rejected: pattern scanning `dxgi.dll`/`GTA5.exe` (rots on every update); locating the game's swapchain object (same fragility; Present hands us `this` anyway).
 
-**Present hook.** First call: `GetDevice` → `ID3D11Device`, `GetImmediateContext`, `GetBuffer(0)` → RTV, init ImGui Win32+DX11 backends, `SetWindowLongPtr(GWLP_WNDPROC)` on `GetDesc().OutputWindow`. Every call: if RTV missing, recreate; NewFrame → draw → Render → original.
+**Present hook.** First call: `GetDevice`, `GetImmediateContext`, `GetBuffer(0)` -> RTV, init ImGui Win32+DX11, subclass `GetDesc().OutputWindow`'s WndProc. Every call: recreate RTV if missing; NewFrame -> draw -> Render -> original. `DXGI_PRESENT_TEST` calls skip drawing.
 
-**ResizeBuffers hook.** Release RTV + `ImGui_ImplDX11_InvalidateDeviceObjects` *before* calling original; Present recreates lazily. Holding the RTV across ResizeBuffers → `DXGI_ERROR_INVALID_CALL`.
+**ResizeBuffers hook.** Release RTV + `ImGui_ImplDX11_InvalidateDeviceObjects` *before* the original; Present recreates lazily.
 
-**WndProc.** Forward to `ImGui_ImplWin32_WndProcHandler`. While the menu is open, swallow mouse/keyboard messages so the game ignores UI input. Menu hotkey (default INSERT) polled with `GetAsyncKeyState` in Present.
+**WndProc.** Always forwards to `ImGui_ImplWin32_WndProcHandler`; while the menu is open, swallows mouse/keyboard/`WM_INPUT`. Menu hotkey (default INSERT) polled with `GetAsyncKeyState` in Present.
 
-## TeamSpeak client
+## Listener (.asi)
 
-- Own thread. Connects to `127.0.0.1:25639` (configurable), telnet-style ClientQuery.
-- Loop: connect → `auth apikey=…` → `clientnotifyregister schandlerid=0 event=any` (or targeted talk-status events) → read lines → update owned `std::map<uint16_t clid, Client{nickname, talking, channel}>`.
-- On every change: build a new immutable `Snapshot` and store into `std::atomic<std::shared_ptr<const Snapshot>>`. Render thread does one `load()` per frame. No mutex, no double buffer.
-- Any failure (TS not running, ClientQuery disabled, bad key, socket drop): publish empty snapshot, log, back off, retry forever. Never throws out of the thread.
-- This pass: threading, socket lifecycle, snapshot plumbing, and a line-parser entry point are real; protocol parsing is stubbed with marked TODOs.
+Own thread. Binds `127.0.0.1:<port>`; `select` with 500 ms timeout so stop and port changes are responsive. Each datagram -> `parse_datagram` -> new immutable `Snapshot{connected, talking[]}` stored in `std::atomic<std::shared_ptr<const Snapshot>>`; render thread does one `load()` per frame. Bind failure -> log, retry every 2 s.
 
 ## Overlay
 
-- Panel listing talking users (name + speaking indicator). Configurable position, opacity, scale.
-- Config menu (INSERT): edit API key/host/port, position, opacity, scale; Save writes INI.
-- Nothing to show → draw nothing.
+Panel listing talking users (green dot + name); configurable position, opacity, scale. Config menu (INSERT): UDP port, position, opacity, scale, Save. Nothing to show -> draws nothing.
 
 ## Config
 
-`<plugins>/YapNotifier.ini`: `api_key`, `host`, `port`, `menu_key`, `pos_x`, `pos_y`, `opacity`, `scale`. Missing file → defaults, overlay idle until a key is set.
+`<plugins>/YapNotifier.ini`: `port`, `menu_key`, `pos_x`, `pos_y`, `opacity`, `scale`. Missing -> defaults.
 
 ## Failure policy
 
-Every subsystem fails closed: hook resolution failure → log and stay dormant; ImGui init failure → pass-through Present; TS failure → empty overlay + retry. No path may crash the game.
+Every subsystem fails closed: hook failure -> dormant; ImGui failure -> pass-through Present; no plugin -> empty overlay. Plugin: socket failure -> `init` returns 1 and TS unloads it. Nothing may crash the game or the TS client.
 
 ## Testing
 
-Game-in-the-loop for hooks/overlay. One host-side `test_parser.cpp` for ClientQuery line parsing (`\s`, `\p`, `\/` unescaping, `key=value|key=value` records) once the protocol is filled in.
+`test_parser` (CTest) covers the datagram parser. Hooks, overlay and the plugin are verified in-game / in-client.

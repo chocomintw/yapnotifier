@@ -4,9 +4,7 @@
 namespace yap {
 
 struct Config {
-    std::string api_key;
-    std::string host = "127.0.0.1";
-    int port = 25639;
+    int port = 25640;     // UDP port the TS3 plugin sends to (yap::proto::kPort)
     int menu_key = 0x2D;  // VK_INSERT
     float pos_x = 20.f;
     float pos_y = 20.f;
