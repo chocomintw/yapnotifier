@@ -10,6 +10,8 @@
 #include <wrl/client.h>
 
 #include <atomic>
+#include <string>
+#include <string_view>
 
 namespace {
 using Microsoft::WRL::ComPtr;
@@ -45,6 +47,21 @@ HRESULT STDMETHODCALLTYPE hk_resize_buffers(IDXGISwapChain* sc, UINT count, UINT
     InFlight guard;
     overlay::on_resize();
     return g_resize_orig(sc, count, w, h, fmt, flags);
+}
+
+std::string module_of(void* addr) {
+    HMODULE mod = nullptr;
+    wchar_t path[MAX_PATH];
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            static_cast<LPCWSTR>(addr), &mod) ||
+        !GetModuleFileNameW(mod, path, MAX_PATH)) {
+        return "?";
+    }
+    std::wstring_view w(path);
+    w = w.substr(w.find_last_of(L'\\') + 1);
+    std::string name;
+    for (wchar_t c : w) name += static_cast<char>(c);  // module names are ASCII
+    return name;
 }
 
 // Every IDXGISwapChain in the process shares dxgi.dll's vtable, so the
@@ -97,8 +114,8 @@ bool resolve_vtable(void*& present, void*& resize_buffers) {
 namespace yap::hooks {
 
 bool install() {
-    if (MH_Initialize() != MH_OK) {
-        log::error("hooks: MH_Initialize failed");
+    if (MH_STATUS s = MH_Initialize(); s != MH_OK) {
+        log::error("hooks: MH_Initialize: {}", MH_StatusToString(s));
         return false;
     }
     void* present = nullptr;
@@ -107,16 +124,23 @@ bool install() {
         MH_Uninitialize();
         return false;
     }
-    if (MH_CreateHook(present, &hk_present, reinterpret_cast<void**>(&g_present_orig)) != MH_OK ||
-        MH_CreateHook(resize, &hk_resize_buffers, reinterpret_cast<void**>(&g_resize_orig)) != MH_OK ||
-        MH_EnableHook(MH_ALL_HOOKS) != MH_OK) {
-        log::error("hooks: creating/enabling hooks failed");
+    // Module names matter: if these aren't in dxgi.dll, FiveM handed us a wrapped swapchain.
+    log::info("hooks: Present={:#x} ({}) ResizeBuffers={:#x} ({})",
+              reinterpret_cast<uintptr_t>(present), module_of(present),
+              reinterpret_cast<uintptr_t>(resize), module_of(resize));
+
+    auto ok = [](const char* step, MH_STATUS s) {
+        if (s != MH_OK) log::error("hooks: {}: {}", step, MH_StatusToString(s));
+        return s == MH_OK;
+    };
+    if (!ok("MH_CreateHook(Present)", MH_CreateHook(present, &hk_present, reinterpret_cast<void**>(&g_present_orig))) ||
+        !ok("MH_CreateHook(ResizeBuffers)", MH_CreateHook(resize, &hk_resize_buffers, reinterpret_cast<void**>(&g_resize_orig))) ||
+        !ok("MH_EnableHook", MH_EnableHook(MH_ALL_HOOKS))) {
         MH_Uninitialize();
         return false;
     }
     g_installed = true;
-    log::info("hooks: Present={:#x} ResizeBuffers={:#x}",
-              reinterpret_cast<uintptr_t>(present), reinterpret_cast<uintptr_t>(resize));
+    log::info("hooks: installed");
     return true;
 }
 

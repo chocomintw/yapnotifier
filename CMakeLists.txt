@@ -10,20 +10,23 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Static CRT: neither binary may depend on a vcredist the player may not have.
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
-# MinHook declares cmake_minimum_required(3.0); tell CMake 4.x to accept it.
-set(CMAKE_POLICY_VERSION_MINIMUM 3.10)
 
 include(FetchContent)
-FetchContent_Declare(minhook
-  GIT_REPOSITORY https://github.com/TsudaKageyu/minhook.git
-  GIT_TAG        v1.3.4)
 FetchContent_Declare(imgui
   GIT_REPOSITORY https://github.com/ocornut/imgui.git
   GIT_TAG        v1.91.9b)
 FetchContent_Declare(ts3sdk
   GIT_REPOSITORY https://github.com/TeamSpeak-Systems/ts3client-pluginsdk.git
   GIT_TAG        4aa90a53aa150cbf81e13bc97e68c0431b26499f)  # plugin API 26, no release tags upstream
-FetchContent_MakeAvailable(minhook imgui ts3sdk)
+FetchContent_MakeAvailable(imgui ts3sdk)
+
+# Vendored: upstream MinHook cannot enable hooks inside FiveM (see third_party/minhook/UPSTREAM.md).
+add_library(minhook STATIC
+  third_party/minhook/src/buffer.c
+  third_party/minhook/src/hook.c
+  third_party/minhook/src/trampoline.c
+  third_party/minhook/src/hde/hde64.c)
+target_include_directories(minhook PUBLIC third_party/minhook/include)
 
 # ImGui ships no CMakeLists; core + the two backends we use.
 add_library(imgui STATIC
