@@ -56,6 +56,9 @@ target_link_libraries(YapNotifier PRIVATE minhook imgui ws2_32)
 target_compile_definitions(YapNotifier PRIVATE ${YAP_COMMON_DEFS})
 target_compile_options(YapNotifier PRIVATE ${YAP_COMMON_OPTS})
 set_target_properties(YapNotifier PROPERTIES PREFIX "" SUFFIX ".asi")
+# Always emit a PDB so FiveM crash offsets (YapNotifier.asi+0x...) resolve to source lines.
+target_compile_options(YapNotifier PRIVATE /Zi)
+target_link_options(YapNotifier PRIVATE /DEBUG /OPT:REF /OPT:ICF)
 
 set(YAPNOTIFIER_DEPLOY_DIR "" CACHE PATH "FiveM plugins directory; when set, the .asi is copied there after every build")
 if(YAPNOTIFIER_DEPLOY_DIR)

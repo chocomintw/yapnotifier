@@ -38,7 +38,9 @@ bool is_input_msg(UINT m) {
 
 LRESULT CALLBACK wndproc(HWND h, UINT m, WPARAM w, LPARAM l) {
     ImGui_ImplWin32_WndProcHandler(h, m, w, l);
-    if (g_menu_open && is_input_msg(m)) return 0;  // menu owns input; game sees nothing
+    // Menu owns input: the game never sees it. DefWindowProc (not the game) still
+    // runs so WM_INPUT buffers are released and Alt/sys keys stay sane.
+    if (g_menu_open && is_input_msg(m)) return DefWindowProcW(h, m, w, l);
     return CallWindowProcW(g_wndproc_orig, h, m, w, l);
 }
 
