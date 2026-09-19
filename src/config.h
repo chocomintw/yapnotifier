@@ -6,6 +6,7 @@ namespace yap {
 struct Config {
     int port = 25640;     // UDP port the TS3 plugin sends to (yap::proto::kPort)
     bool auto_update = true;
+    bool safe_mode = false;   // diagnostic: hook Present only, pass-through, no overlay
     int menu_key = 0x2D;  // VK_INSERT
     float pos_x = 20.f;
     float pos_y = 20.f;

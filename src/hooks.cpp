@@ -27,6 +27,7 @@ constexpr size_t kResizeBuffersSlot = 13;
 PresentFn g_present_orig = nullptr;
 ResizeBuffersFn g_resize_orig = nullptr;
 bool g_installed = false;
+bool g_safe_mode = false;
 
 // Counts threads currently inside a detour so remove() can drain them.
 std::atomic<int> g_in_flight{0};
@@ -38,7 +39,7 @@ struct InFlight {
 
 HRESULT STDMETHODCALLTYPE hk_present(IDXGISwapChain* sc, UINT sync_interval, UINT flags) {
     InFlight guard;
-    if (!(flags & DXGI_PRESENT_TEST)) overlay::render(sc);
+    if (!g_safe_mode && !(flags & DXGI_PRESENT_TEST)) overlay::render(sc);
     return g_present_orig(sc, sync_interval, flags);
 }
 
@@ -113,7 +114,8 @@ bool resolve_vtable(void*& present, void*& resize_buffers) {
 
 namespace yap::hooks {
 
-bool install() {
+bool install(bool safe_mode) {
+    g_safe_mode = safe_mode;
     if (MH_STATUS s = MH_Initialize(); s != MH_OK) {
         log::error("hooks: MH_Initialize: {}", MH_StatusToString(s));
         return false;
@@ -133,14 +135,23 @@ bool install() {
         if (s != MH_OK) log::error("hooks: {}: {}", step, MH_StatusToString(s));
         return s == MH_OK;
     };
-    if (!ok("MH_CreateHook(Present)", MH_CreateHook(present, &hk_present, reinterpret_cast<void**>(&g_present_orig))) ||
-        !ok("MH_CreateHook(ResizeBuffers)", MH_CreateHook(resize, &hk_resize_buffers, reinterpret_cast<void**>(&g_resize_orig))) ||
-        !ok("MH_EnableHook", MH_EnableHook(MH_ALL_HOOKS))) {
+    // In safe_mode we hook only Present and pass it through, to isolate the hook
+    // mechanism from our render/resize code.
+    if (!ok("MH_CreateHook(Present)", MH_CreateHook(present, &hk_present, reinterpret_cast<void**>(&g_present_orig)))) {
+        MH_Uninitialize();
+        return false;
+    }
+    if (!safe_mode &&
+        !ok("MH_CreateHook(ResizeBuffers)", MH_CreateHook(resize, &hk_resize_buffers, reinterpret_cast<void**>(&g_resize_orig)))) {
+        MH_Uninitialize();
+        return false;
+    }
+    if (!ok("MH_EnableHook", MH_EnableHook(MH_ALL_HOOKS))) {
         MH_Uninitialize();
         return false;
     }
     g_installed = true;
-    log::info("hooks: installed");
+    log::info("hooks: installed{}", safe_mode ? " (SAFE MODE: pass-through, no overlay)" : "");
     return true;
 }
 
