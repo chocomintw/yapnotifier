@@ -15,7 +15,7 @@ cmake -S . -B build -A x64 [-DYAPNOTIFIER_DEPLOY_DIR="C:/path/to/FiveM/plugins"]
 cmake --build build --config Release
 ```
 
-Output: `build/Release/YapNotifier.asi`. With `YAPNOTIFIER_DEPLOY_DIR` set it is copied there after every build. Compiles with `/W4 /permissive-`; keep it warning-free.
+Output: `build/Release/YapNotifier.asi`. `YapNotifier.rc` carries the `FX_ASI_BUILD` resources FiveM requires (one per game build; add a line when a new build ships or the plugin silently refuses to load) plus the version info. With `YAPNOTIFIER_DEPLOY_DIR` set it is copied there after every build. Compiles with `/W4 /permissive-`; keep it warning-free.
 
 There is no test suite — hooks and overlay can only be verified in-game. Runtime log: `<plugins>/YapNotifier.log`; settings: `<plugins>/YapNotifier.ini`. Press **INSERT** in-game for the config menu, **END** to eject the plugin (dev hot-reload).
 

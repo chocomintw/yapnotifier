@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(YapNotifier LANGUAGES C CXX)
+project(YapNotifier LANGUAGES C CXX RC)
 
 if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
   message(FATAL_ERROR "YapNotifier only builds as x64 Windows (open an x64 VS prompt or use -A x64)")
@@ -38,7 +38,8 @@ add_library(YapNotifier SHARED
   src/config.cpp
   src/hooks.cpp
   src/overlay.cpp
-  src/teamspeak.cpp)
+  src/teamspeak.cpp
+  YapNotifier.rc)  # FX_ASI_BUILD resources: FiveM refuses the .asi without them
 target_link_libraries(YapNotifier PRIVATE minhook imgui ws2_32)
 target_compile_definitions(YapNotifier PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)
 target_compile_options(YapNotifier PRIVATE /W4 /permissive- /utf-8)
