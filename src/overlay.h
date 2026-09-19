@@ -1,27 +1,26 @@
 #pragma once
-#include <Windows.h>
-
 #include <string>
 
 #include "config.h"
 
-struct IDXGISwapChain;
-
-// ImGui overlay: owns the ImGui context, the backbuffer RTV, and the game
-// window's WndProc. Everything here except shutdown() runs on the render
-// thread inside the Present/ResizeBuffers hooks.
+// The overlay is a separate, transparent, top-most, click-through window with its
+// OWN D3D11 device — it does NOT hook the game's renderer or subclass the game
+// window. FiveM's anti-cheat (adhesive) terminates the process a minute or so
+// after any IDXGISwapChain::Present hook or game-window subclass, so we own our
+// window and touch nothing of the game's. Approach borrowed from tcpstorm/vlights.
 namespace yap::overlay {
 
-// Call once before hooks are enabled.
+// Call before start().
 void set_config(const Config& cfg, std::wstring ini_path);
 
-// From the Present hook, before the original Present.
-void render(IDXGISwapChain* swapchain);
+// Spawns the UI thread (window + device + ImGui + message loop). Never throws;
+// on failure it logs and the overlay stays dormant.
+void start();
 
-// From the ResizeBuffers hook, before the original ResizeBuffers.
-void on_resize();
+// Stops the UI thread and tears everything down. Safe if start() failed.
+void stop();
 
-// From the eject thread, after hooks are disabled and drained.
-void shutdown();
+// Toggle the interactive config menu (from the hotkey poll on another thread).
+void toggle_menu();
 
 }  // namespace yap::overlay

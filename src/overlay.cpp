@@ -5,93 +5,180 @@
 #include "update.h"
 #include "version.h"
 
+#include <Windows.h>
 #include <d3d11.h>
 #include <dxgi.h>
-#include <wrl/client.h>
 
 #include <imgui.h>
 #include <imgui_impl_dx11.h>
 #include <imgui_impl_win32.h>
 
+#include <atomic>
+#include <thread>
+#include <vector>
+
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND, UINT, WPARAM, LPARAM);
 
 namespace {
-using Microsoft::WRL::ComPtr;
 using namespace yap;
+
+// Pure-black is the transparency key: anything we clear/leave black shows the game
+// through it (LWA_COLORKEY also makes those pixels click-through for free). ImGui's
+// default window background is ~RGB(15,15,15), not pure black, so panels stay visible.
+// ponytail: color-key = binary transparency (no true per-pixel alpha over the game);
+//           upgrade to a DirectComposition flip-model swapchain if soft edges matter.
+constexpr COLORREF kColorKey = RGB(0, 0, 0);
+constexpr UINT WM_YAP_TOGGLE = WM_APP + 1;
+constexpr wchar_t kGameWindowClass[] = L"grcWindow";
 
 Config g_cfg;
 std::wstring g_ini;
 
-ComPtr<ID3D11Device> g_device;
-ComPtr<ID3D11DeviceContext> g_ctx;
-ComPtr<ID3D11RenderTargetView> g_rtv;
 HWND g_hwnd = nullptr;
-WNDPROC g_wndproc_orig = nullptr;
+ID3D11Device* g_device = nullptr;
+ID3D11DeviceContext* g_ctx = nullptr;
+IDXGISwapChain* g_swapchain = nullptr;
+ID3D11RenderTargetView* g_rtv = nullptr;
+UINT g_width = 0, g_height = 0;
 
-bool g_inited = false;
-bool g_failed = false;  // sticky: after an init failure, Present is pass-through forever
-bool g_menu_open = false;
+std::thread g_thread;
+std::atomic<bool> g_stop{false};
+std::atomic<bool> g_ready{false};
+std::atomic<bool> g_menu_open{false};
 
-bool is_input_msg(UINT m) {
-    return (m >= WM_MOUSEFIRST && m <= WM_MOUSELAST) ||
-           (m >= WM_KEYFIRST && m <= WM_KEYLAST) ||
-           m == WM_INPUT;  // GTA reads mouse-look via raw input
+// --- camera lock (borrowed from vlights) -------------------------------------
+// The game reads the mouse via process-wide raw input (RIDEV_INPUTSINK), so it
+// keeps turning the camera while we drag a slider. While the menu is open we
+// unregister the game's raw mouse and restore its exact registration on close.
+std::vector<RAWINPUTDEVICE> g_saved_mouse;
+bool g_mouse_suspended = false;
+
+void suspend_game_mouse() {
+    if (g_mouse_suspended) return;
+    UINT n = 0;
+    if (GetRegisteredRawInputDevices(nullptr, &n, sizeof(RAWINPUTDEVICE)) != 0 || n == 0) return;
+    std::vector<RAWINPUTDEVICE> all(n);
+    UINT got = GetRegisteredRawInputDevices(all.data(), &n, sizeof(RAWINPUTDEVICE));
+    if (got == static_cast<UINT>(-1)) return;
+    g_saved_mouse.clear();
+    for (UINT i = 0; i < got; ++i)
+        if (all[i].usUsagePage == 0x01 && all[i].usUsage == 0x02) g_saved_mouse.push_back(all[i]);
+    if (g_saved_mouse.empty()) return;
+    RAWINPUTDEVICE remove{0x01, 0x02, RIDEV_REMOVE, nullptr};
+    if (RegisterRawInputDevices(&remove, 1, sizeof(remove))) {
+        g_mouse_suspended = true;
+        log::info("overlay: camera locked (raw mouse suspended)");
+    }
 }
 
-LRESULT CALLBACK wndproc(HWND h, UINT m, WPARAM w, LPARAM l) {
-    ImGui_ImplWin32_WndProcHandler(h, m, w, l);
-    // Menu owns input: the game never sees it. DefWindowProc (not the game) still
-    // runs so WM_INPUT buffers are released and Alt/sys keys stay sane.
-    if (g_menu_open && is_input_msg(m)) return DefWindowProcW(h, m, w, l);
-    return CallWindowProcW(g_wndproc_orig, h, m, w, l);
+void restore_game_mouse() {
+    if (!g_mouse_suspended) return;
+    RegisterRawInputDevices(g_saved_mouse.data(), static_cast<UINT>(g_saved_mouse.size()), sizeof(RAWINPUTDEVICE));
+    g_mouse_suspended = false;
+    log::info("overlay: camera unlocked");
 }
 
-bool init(IDXGISwapChain* sc) {
-    if (FAILED(sc->GetDevice(IID_PPV_ARGS(&g_device)))) return false;
-    g_device->GetImmediateContext(&g_ctx);
-    DXGI_SWAP_CHAIN_DESC desc{};
-    if (FAILED(sc->GetDesc(&desc)) || !desc.OutputWindow) return false;
-    g_hwnd = desc.OutputWindow;
+// --- D3D --------------------------------------------------------------------
+template <class T>
+void release(T*& p) {
+    if (p) {
+        p->Release();
+        p = nullptr;
+    }
+}
 
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO();
-    io.IniFilename = nullptr;  // our own INI handles persistence
-    if (!ImGui_ImplWin32_Init(g_hwnd)) {
-        ImGui::DestroyContext();
+bool create_rtv() {
+    ID3D11Texture2D* back = nullptr;
+    if (FAILED(g_swapchain->GetBuffer(0, IID_PPV_ARGS(&back))) || !back) return false;
+    HRESULT hr = g_device->CreateRenderTargetView(back, nullptr, &g_rtv);
+    back->Release();
+    return SUCCEEDED(hr) && g_rtv;
+}
+
+bool create_device(HWND hwnd, UINT w, UINT h) {
+    DXGI_SWAP_CHAIN_DESC sd{};
+    sd.BufferCount = 2;
+    sd.BufferDesc.Width = w;
+    sd.BufferDesc.Height = h;
+    sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    sd.OutputWindow = hwnd;
+    sd.SampleDesc.Count = 1;
+    sd.Windowed = TRUE;
+    sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+    D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_0};
+    HRESULT hr = D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, levels, 2,
+                                               D3D11_SDK_VERSION, &sd, &g_swapchain, &g_device, nullptr, &g_ctx);
+    if (FAILED(hr)) {
+        log::error("overlay: D3D11CreateDeviceAndSwapChain failed: {:#x}", static_cast<unsigned>(hr));
         return false;
     }
-    if (!ImGui_ImplDX11_Init(g_device.Get(), g_ctx.Get())) {
-        ImGui_ImplWin32_Shutdown();
-        ImGui::DestroyContext();
-        return false;
-    }
+    g_width = w;
+    g_height = h;
+    return create_rtv();
+}
 
-    g_wndproc_orig = reinterpret_cast<WNDPROC>(
-        SetWindowLongPtrW(g_hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(wndproc)));
-    log::info("overlay: initialised (hwnd={:#x}, {}x{})",
-              reinterpret_cast<uintptr_t>(g_hwnd), desc.BufferDesc.Width, desc.BufferDesc.Height);
+void destroy_device() {
+    release(g_rtv);
+    release(g_swapchain);
+    release(g_ctx);
+    release(g_device);
+}
+
+// --- window ------------------------------------------------------------------
+// Screen rect of the game's client area, so our window covers exactly it.
+bool game_client_rect(RECT& out) {
+    HWND game = FindWindowW(kGameWindowClass, nullptr);
+    if (!game) return false;
+    RECT c{};
+    if (!GetClientRect(game, &c) || c.right <= c.left || c.bottom <= c.top) return false;
+    POINT tl{c.left, c.top};
+    ClientToScreen(game, &tl);
+    out = {tl.x, tl.y, tl.x + (c.right - c.left), tl.y + (c.bottom - c.top)};
     return true;
 }
 
-bool create_rtv(IDXGISwapChain* sc) {
-    ComPtr<ID3D11Texture2D> backbuffer;
-    if (FAILED(sc->GetBuffer(0, IID_PPV_ARGS(&backbuffer)))) return false;
-    return SUCCEEDED(g_device->CreateRenderTargetView(backbuffer.Get(), nullptr, &g_rtv));
+void set_click_through(bool on) {
+    LONG_PTR ex = GetWindowLongPtrW(g_hwnd, GWL_EXSTYLE);
+    ex = on ? (ex | WS_EX_TRANSPARENT) : (ex & ~WS_EX_TRANSPARENT);
+    SetWindowLongPtrW(g_hwnd, GWL_EXSTYLE, ex);
 }
 
-void poll_menu_key() {
-    static bool was_down = false;
-    bool down = (GetAsyncKeyState(g_cfg.menu_key) & 0x8000) != 0;
-    if (down && !was_down) g_menu_open = !g_menu_open;
-    was_down = down;
-    ImGui::GetIO().MouseDrawCursor = g_menu_open;  // game hides the cursor; draw our own
+LRESULT CALLBACK wndproc(HWND h, UINT m, WPARAM w, LPARAM l) {
+    if (ImGui_ImplWin32_WndProcHandler(h, m, w, l)) return 1;
+    switch (m) {
+        case WM_YAP_TOGGLE: {
+            bool open = !g_menu_open.load();
+            g_menu_open = open;
+            set_click_through(!open);
+            if (open) {
+                SetForegroundWindow(h);
+                SetFocus(h);
+                suspend_game_mouse();
+            } else {
+                restore_game_mouse();
+                if (HWND game = FindWindowW(kGameWindowClass, nullptr)) SetForegroundWindow(game);
+            }
+            return 0;
+        }
+        case WM_SETCURSOR:
+            if (LOWORD(l) == HTCLIENT) {
+                SetCursor(nullptr);  // ImGui draws its own cursor
+                return TRUE;
+            }
+            break;
+        case WM_DESTROY:
+            restore_game_mouse();
+            PostQuitMessage(0);
+            return 0;
+    }
+    return DefWindowProcW(h, m, w, l);
 }
 
+// --- ImGui content -----------------------------------------------------------
 void draw_talkers() {
     auto snap = ts::snapshot();
     if (snap->talking.empty()) return;
-
     ImGui::SetNextWindowPos({g_cfg.pos_x, g_cfg.pos_y}, ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(g_cfg.opacity);
     ImGui::Begin("##yap_talkers", nullptr,
@@ -111,16 +198,13 @@ void draw_talkers() {
     ImGui::End();
 }
 
-// Update/updated banner: top-centre for 20 s after it first appears, then only in the menu.
 void draw_notice() {
     auto notice = update::notice();
     if (notice->empty()) return;
     static ULONGLONG first_seen = 0;
     if (!first_seen) first_seen = GetTickCount64();
     if (GetTickCount64() - first_seen > 20000) return;
-
-    const ImVec2 display = ImGui::GetIO().DisplaySize;
-    ImGui::SetNextWindowPos({display.x * 0.5f, 24.f}, ImGuiCond_Always, {0.5f, 0.f});
+    ImGui::SetNextWindowPos({ImGui::GetIO().DisplaySize.x * 0.5f, 24.f}, ImGuiCond_Always, {0.5f, 0.f});
     ImGui::SetNextWindowBgAlpha(0.85f);
     ImGui::Begin("##yap_notice", nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
@@ -131,10 +215,14 @@ void draw_notice() {
 }
 
 void draw_menu() {
-    ImGui::Begin("YapNotifier v" YAP_VERSION, &g_menu_open, ImGuiWindowFlags_AlwaysAutoResize);
+    ImGui::SetNextWindowSize({420, 0}, ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos({g_cfg.pos_x, g_cfg.pos_y + 80}, ImGuiCond_FirstUseEver);
+    bool open = g_menu_open.load();
+    ImGui::Begin("YapNotifier v" YAP_VERSION, &open, ImGuiWindowFlags_AlwaysAutoResize);
     auto snap = ts::snapshot();
-    ImGui::TextDisabled(snap->connected ? "TS3 plugin: connected" : "TS3 plugin: not connected (is the YapNotifier plugin enabled in TeamSpeak?)");
-    if (auto notice = update::notice(); !notice->empty()) ImGui::TextColored({1.f, 0.85f, 0.3f, 1.f}, "%s", notice->c_str());
+    ImGui::TextDisabled(snap->connected ? "TS3 plugin: connected"
+                                        : "TS3 plugin: not connected (enable the YapNotifier plugin in TeamSpeak)");
+    if (auto n = update::notice(); !n->empty()) ImGui::TextColored({1.f, 0.85f, 0.3f, 1.f}, "%s", n->c_str());
     ImGui::Separator();
     ImGui::InputInt("UDP port", &g_cfg.port);
     ImGui::Checkbox("Auto-update on launch", &g_cfg.auto_update);
@@ -150,8 +238,131 @@ void draw_menu() {
         log::info("overlay: config saved");
     }
     ImGui::SameLine();
-    ImGui::TextDisabled("(INSERT toggles this menu, END ejects the plugin)");
+    ImGui::TextDisabled("INSERT toggles this menu, END ejects the plugin");
     ImGui::End();
+    if (!open && g_menu_open.load()) PostMessageW(g_hwnd, WM_YAP_TOGGLE, 0, 0);  // window's [x]
+}
+
+// Keep our window aligned with the game and sized to its client area.
+void track_game_window() {
+    RECT r{};
+    if (!game_client_rect(r)) return;
+    UINT w = static_cast<UINT>(r.right - r.left), h = static_cast<UINT>(r.bottom - r.top);
+    SetWindowPos(g_hwnd, HWND_TOPMOST, r.left, r.top, w, h, SWP_NOACTIVATE);
+    if ((w != g_width || h != g_height) && w && h) {
+        release(g_rtv);
+        if (SUCCEEDED(g_swapchain->ResizeBuffers(0, w, h, DXGI_FORMAT_UNKNOWN, 0))) {
+            g_width = w;
+            g_height = h;
+            create_rtv();
+        }
+    }
+}
+
+void render_frame() {
+    if (!g_rtv) return;
+    if (g_menu_open.load()) {
+        ClipCursor(nullptr);
+        ImGui::GetIO().MouseDrawCursor = true;
+    } else {
+        ImGui::GetIO().MouseDrawCursor = false;
+    }
+    ImGui_ImplDX11_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::NewFrame();
+    draw_talkers();
+    draw_notice();
+    if (g_menu_open.load()) draw_menu();
+    ImGui::Render();
+    const float clear[4] = {0.f, 0.f, 0.f, 0.f};  // black = transparent via color key
+    g_ctx->OMSetRenderTargets(1, &g_rtv, nullptr);
+    g_ctx->ClearRenderTargetView(g_rtv, clear);
+    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+    g_swapchain->Present(0, 0);  // no vsync: never contend with the game's swapchain
+}
+
+DWORD WINAPI ui_thread(LPVOID) {
+    WNDCLASSEXW wc{};
+    wc.cbSize = sizeof wc;
+    wc.style = CS_CLASSDC;
+    wc.lpfnWndProc = wndproc;
+    wc.hInstance = GetModuleHandleW(nullptr);
+    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wc.lpszClassName = L"YapNotifierOverlay";
+    if (!RegisterClassExW(&wc)) {
+        log::error("overlay: RegisterClassEx failed ({})", GetLastError());
+        return 0;
+    }
+
+    RECT r{};
+    if (!game_client_rect(r)) {
+        r = {0, 0, static_cast<LONG>(GetSystemMetrics(SM_CXSCREEN)),
+             static_cast<LONG>(GetSystemMetrics(SM_CYSCREEN))};
+    }
+    UINT w = static_cast<UINT>(r.right - r.left), h = static_cast<UINT>(r.bottom - r.top);
+
+    // Layered + transparent + topmost + no-activate tool window: draws over the game,
+    // starts click-through, never steals focus until the menu opens.
+    g_hwnd = CreateWindowExW(
+        WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+        wc.lpszClassName, L"YapNotifier", WS_POPUP, r.left, r.top, static_cast<int>(w), static_cast<int>(h),
+        nullptr, nullptr, wc.hInstance, nullptr);
+    if (!g_hwnd) {
+        log::error("overlay: CreateWindowEx failed ({})", GetLastError());
+        UnregisterClassW(wc.lpszClassName, wc.hInstance);
+        return 0;
+    }
+    SetLayeredWindowAttributes(g_hwnd, kColorKey, 0, LWA_COLORKEY);
+    ShowWindow(g_hwnd, SW_SHOWNOACTIVATE);
+
+    if (!create_device(g_hwnd, w, h)) {
+        destroy_device();
+        DestroyWindow(g_hwnd);
+        g_hwnd = nullptr;
+        UnregisterClassW(wc.lpszClassName, wc.hInstance);
+        return 0;
+    }
+
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    io.IniFilename = nullptr;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
+    ImGui::StyleColorsDark();
+    if (!ImGui_ImplWin32_Init(g_hwnd) || !ImGui_ImplDX11_Init(g_device, g_ctx)) {
+        log::error("overlay: ImGui backend init failed");
+        ImGui::DestroyContext();
+        destroy_device();
+        DestroyWindow(g_hwnd);
+        g_hwnd = nullptr;
+        UnregisterClassW(wc.lpszClassName, wc.hInstance);
+        return 0;
+    }
+
+    g_ready = true;
+    log::info("overlay: ready (own {}x{} window, no game hooks)", w, h);
+
+    MSG msg{};
+    while (!g_stop.load()) {
+        while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+        track_game_window();
+        render_frame();
+        Sleep(16);  // ~60fps; ponytail: could idle when nothing is talking + menu closed
+    }
+
+    ImGui_ImplDX11_Shutdown();
+    ImGui_ImplWin32_Shutdown();
+    ImGui::DestroyContext();
+    destroy_device();
+    DestroyWindow(g_hwnd);
+    g_hwnd = nullptr;
+    UnregisterClassW(wc.lpszClassName, wc.hInstance);
+    log::info("overlay: shut down");
+    return 0;
 }
 }  // namespace
 
@@ -162,52 +373,19 @@ void set_config(const Config& cfg, std::wstring ini_path) {
     g_ini = std::move(ini_path);
 }
 
-void render(IDXGISwapChain* sc) {
-    if (g_failed) return;
-    if (!g_inited) {
-        if (!init(sc)) {
-            g_failed = true;
-            log::error("overlay: init failed; overlay disabled");
-            return;
-        }
-        g_inited = true;
-    }
-    if (!g_rtv && !create_rtv(sc)) {
-        g_failed = true;
-        log::error("overlay: could not create backbuffer RTV; overlay disabled");
-        return;
-    }
-
-    poll_menu_key();
-    ImGui_ImplDX11_NewFrame();
-    ImGui_ImplWin32_NewFrame();
-    ImGui::NewFrame();
-    draw_talkers();
-    draw_notice();
-    if (g_menu_open) draw_menu();
-    ImGui::Render();
-    g_ctx->OMSetRenderTargets(1, g_rtv.GetAddressOf(), nullptr);
-    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+void start() {
+    if (g_thread.joinable()) return;
+    g_stop = false;
+    g_thread = std::thread([] { ui_thread(nullptr); });
 }
 
-void on_resize() {
-    // Must drop every backbuffer reference before the original ResizeBuffers
-    // runs or it fails with DXGI_ERROR_INVALID_CALL. Recreated lazily in render().
-    g_rtv.Reset();
-    if (g_inited) ImGui_ImplDX11_InvalidateDeviceObjects();
+void stop() {
+    g_stop = true;
+    if (g_thread.joinable()) g_thread.join();
 }
 
-void shutdown() {
-    if (!g_inited) return;
-    if (g_wndproc_orig) SetWindowLongPtrW(g_hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(g_wndproc_orig));
-    ImGui_ImplDX11_Shutdown();
-    ImGui_ImplWin32_Shutdown();
-    ImGui::DestroyContext();
-    g_rtv.Reset();
-    g_ctx.Reset();
-    g_device.Reset();
-    g_inited = false;
-    log::info("overlay: shut down");
+void toggle_menu() {
+    if (g_ready.load() && g_hwnd) PostMessageW(g_hwnd, WM_YAP_TOGGLE, 0, 0);
 }
 
 }  // namespace yap::overlay

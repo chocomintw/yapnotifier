@@ -20,14 +20,6 @@ FetchContent_Declare(ts3sdk
   GIT_TAG        4aa90a53aa150cbf81e13bc97e68c0431b26499f)  # plugin API 26, no release tags upstream
 FetchContent_MakeAvailable(imgui ts3sdk)
 
-# Vendored: upstream MinHook cannot enable hooks inside FiveM (see third_party/minhook/UPSTREAM.md).
-add_library(minhook STATIC
-  third_party/minhook/src/buffer.c
-  third_party/minhook/src/hook.c
-  third_party/minhook/src/trampoline.c
-  third_party/minhook/src/hde/hde64.c)
-target_include_directories(minhook PUBLIC third_party/minhook/include)
-
 # ImGui ships no CMakeLists; core + the two backends we use.
 add_library(imgui STATIC
   ${imgui_SOURCE_DIR}/imgui.cpp
@@ -47,13 +39,12 @@ add_library(YapNotifier SHARED
   src/main.cpp
   src/log.cpp
   src/config.cpp
-  src/hooks.cpp
   src/overlay.cpp
   src/teamspeak.cpp
   src/update.cpp
   YapNotifier.rc)  # FX_ASI_BUILD resources: FiveM refuses the .asi without them
 target_include_directories(YapNotifier PRIVATE shared)
-target_link_libraries(YapNotifier PRIVATE minhook imgui ws2_32 winhttp bcrypt)
+target_link_libraries(YapNotifier PRIVATE imgui ws2_32 winhttp bcrypt)
 target_compile_definitions(YapNotifier PRIVATE ${YAP_COMMON_DEFS})
 target_compile_options(YapNotifier PRIVATE ${YAP_COMMON_OPTS})
 set_target_properties(YapNotifier PROPERTIES PREFIX "" SUFFIX ".asi")
