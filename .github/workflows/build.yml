@@ -25,20 +25,22 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory dist | Out-Null
-          Copy-Item build/Release/YapNotifier.asi, build/Release/YapNotifier.pdb, build/YapNotifier.ts3_plugin dist/
-          Get-FileHash dist/* -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $(Split-Path $_.Path -Leaf)" } | Set-Content dist/SHA256SUMS.txt
-          Get-Content dist/SHA256SUMS.txt
+          Copy-Item build/Release/YapNotifier.asi, build/YapNotifier.ts3_plugin dist/
+          Copy-Item build/Release/YapNotifier.pdb .   # CI artifact only, never released
+          $sums = Get-FileHash dist/* -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" }
+          @("## SHA-256", '```', $sums, '```') | Set-Content release-notes.md
+          Get-Content release-notes.md
 
       - uses: actions/upload-artifact@v4
         with:
           name: YapNotifier-${{ github.sha }}
-          path: dist/
+          path: |
+            dist/
+            YapNotifier.pdb
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist/YapNotifier.asi
-            dist/YapNotifier.ts3_plugin
-            dist/SHA256SUMS.txt
+          files: dist/*
+          body_path: release-notes.md
