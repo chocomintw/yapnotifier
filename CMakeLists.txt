@@ -10,6 +10,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Static CRT: the .asi must not depend on a vcredist the player may not have.
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
+# MinHook declares cmake_minimum_required(3.0); tell CMake 4.x to accept it.
+set(CMAKE_POLICY_VERSION_MINIMUM 3.10)
+
 include(FetchContent)
 FetchContent_Declare(minhook
   GIT_REPOSITORY https://github.com/TsudaKageyu/minhook.git
