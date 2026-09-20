@@ -184,7 +184,8 @@ void draw_talkers() {
     ImGui::Begin("##yap_talkers", nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
                      ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
-                     ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav);
+                     ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
+                     ImGuiWindowFlags_NoBringToFrontOnFocus);
     ImGui::SetWindowFontScale(g_cfg.scale);
     const float r = ImGui::GetTextLineHeight() * 0.3f;
     for (const auto& c : snap->talking) {
@@ -209,7 +210,8 @@ void draw_notice() {
     ImGui::Begin("##yap_notice", nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
                      ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
-                     ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav);
+                     ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
+                     ImGuiWindowFlags_NoBringToFrontOnFocus);
     ImGui::TextColored({1.f, 0.85f, 0.3f, 1.f}, "%s", notice->c_str());
     ImGui::End();
 }
@@ -274,7 +276,12 @@ void render_frame() {
     draw_notice();
     if (g_menu_open.load()) draw_menu();
     ImGui::Render();
-    const float clear[4] = {0.f, 0.f, 0.f, 0.f};  // black = transparent via color key
+    // Black = transparent via color key, and keyed pixels are also *not hit-testable*: a
+    // drag whose cursor outruns the menu by a frame lands on the game and ImGui loses the
+    // move. While the menu is open clear to RGB(1,1,1) instead: invisibly dim, but every
+    // pixel is ours, so all mouse input (and SetCapture) reaches ImGui.
+    const float k = g_menu_open.load() ? 1.f / 255.f : 0.f;
+    const float clear[4] = {k, k, k, 1.f};
     g_ctx->OMSetRenderTargets(1, &g_rtv, nullptr);
     g_ctx->ClearRenderTargetView(g_rtv, clear);
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());

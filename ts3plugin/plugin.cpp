@@ -8,7 +8,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
-#include <utility>
+#include <tuple>
 
 #include "teamspeak/public_definitions.h"
 #include "teamspeak/public_errors.h"
@@ -22,8 +22,9 @@
 namespace {
 TS3Functions ts3{};
 
-// clients seen talking, keyed by (server connection, client id)
-using Key = std::pair<uint64, anyID>;
+// clients seen talking, keyed by (is someone else, server connection, client id):
+// the own client sorts first, so it is always the top line of the overlay.
+using Key = std::tuple<bool, uint64, anyID>;
 std::mutex g_mutex;
 std::map<Key, std::string> g_talking;
 
@@ -36,7 +37,7 @@ void send_state_locked() {
     if (g_sock == INVALID_SOCKET) return;
     std::string d = yap::proto::kMagic;
     for (const auto& [key, name] : g_talking) {
-        d += std::to_string(key.second);
+        d += std::to_string(std::get<2>(key));
         d += '\t';
         d += name;
         d += '\n';
@@ -45,14 +46,16 @@ void send_state_locked() {
            reinterpret_cast<const sockaddr*>(&g_dest), sizeof g_dest);
 }
 
-void erase_client(uint64 schid, anyID clid) {
-    std::lock_guard lk(g_mutex);
-    if (g_talking.erase({schid, clid})) send_state_locked();
-}
-
 bool is_own_client(uint64 schid, anyID clid) {
     anyID me = 0;
     return ts3.getClientID(schid, &me) == ERROR_ok && me == clid;
+}
+
+Key key_for(uint64 schid, anyID clid) { return {!is_own_client(schid, clid), schid, clid}; }
+
+void erase_client(uint64 schid, anyID clid) {
+    std::lock_guard lk(g_mutex);
+    if (g_talking.erase(key_for(schid, clid))) send_state_locked();
 }
 }  // namespace
 
@@ -106,7 +109,6 @@ EXPORT void ts3plugin_shutdown() {
 
 // --- events -------------------------------------------------------------------
 EXPORT void ts3plugin_onTalkStatusChangeEvent(uint64 schid, int status, int /*isReceivedWhisper*/, anyID clid) {
-    if (is_own_client(schid, clid)) return;  // it's a "who's talking" overlay; you know when it's you
     if (status != STATUS_TALKING) {
         erase_client(schid, clid);
         return;
@@ -116,7 +118,7 @@ EXPORT void ts3plugin_onTalkStatusChangeEvent(uint64 schid, int status, int /*is
     std::string nick(name);
     ts3.freeMemory(name);
     std::lock_guard lk(g_mutex);
-    g_talking[{schid, clid}] = std::move(nick);
+    g_talking[key_for(schid, clid)] = std::move(nick);
     send_state_locked();
 }
 
@@ -142,7 +144,7 @@ EXPORT void ts3plugin_onConnectStatusChangeEvent(uint64 schid, int new_status, u
     std::lock_guard lk(g_mutex);
     bool changed = false;
     for (auto it = g_talking.begin(); it != g_talking.end();) {
-        if (it->first.first == schid) {
+        if (std::get<1>(it->first) == schid) {
             it = g_talking.erase(it);
             changed = true;
         } else {
