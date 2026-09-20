@@ -7,7 +7,9 @@
 
 #include <Windows.h>
 #include <d3d11.h>
-#include <dxgi.h>
+#include <dcomp.h>
+#include <dwmapi.h>
+#include <dxgi1_2.h>
 
 #include <imgui.h>
 #include <imgui_impl_dx11.h>
@@ -22,12 +24,12 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND, UINT, WPARAM,
 namespace {
 using namespace yap;
 
-// Pure-black is the transparency key: anything we clear/leave black shows the game
-// through it (LWA_COLORKEY also makes those pixels click-through for free). ImGui's
-// default window background is ~RGB(15,15,15), not pure black, so panels stay visible.
-// ponytail: color-key = binary transparency (no true per-pixel alpha over the game);
-//           upgrade to a DirectComposition flip-model swapchain if soft edges matter.
-constexpr COLORREF kColorKey = RGB(0, 0, 0);
+// Per-pixel alpha over the game via a DirectComposition swapchain on a layered window
+// whose own (never painted) surface is made transparent by extending the DWM frame.
+// LWA_ALPHA 255 means hit-testing is whole-window, so click-through is purely
+// WS_EX_TRANSPARENT, toggled with the menu. (LWA_COLORKEY was visually right but user32
+// hit-tested the never-painted GDI bitmap, so every click fell through; and
+// WS_EX_TRANSPARENT only passes input through when the window is also WS_EX_LAYERED.)
 constexpr UINT WM_YAP_TOGGLE = WM_APP + 1;
 constexpr wchar_t kGameWindowClass[] = L"grcWindow";
 
@@ -37,7 +39,10 @@ std::wstring g_ini;
 HWND g_hwnd = nullptr;
 ID3D11Device* g_device = nullptr;
 ID3D11DeviceContext* g_ctx = nullptr;
-IDXGISwapChain* g_swapchain = nullptr;
+IDXGISwapChain1* g_swapchain = nullptr;
+IDCompositionDevice* g_dcomp = nullptr;
+IDCompositionTarget* g_dcomp_target = nullptr;
+IDCompositionVisual* g_dcomp_visual = nullptr;
 ID3D11RenderTargetView* g_rtv = nullptr;
 UINT g_width = 0, g_height = 0;
 
@@ -96,21 +101,35 @@ bool create_rtv() {
 }
 
 bool create_device(HWND hwnd, UINT w, UINT h) {
-    DXGI_SWAP_CHAIN_DESC sd{};
-    sd.BufferCount = 2;
-    sd.BufferDesc.Width = w;
-    sd.BufferDesc.Height = h;
-    sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    sd.OutputWindow = hwnd;
-    sd.SampleDesc.Count = 1;
-    sd.Windowed = TRUE;
-    sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
     D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_0};
-    HRESULT hr = D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, levels, 2,
-                                               D3D11_SDK_VERSION, &sd, &g_swapchain, &g_device, nullptr, &g_ctx);
+    HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+                                   levels, 2, D3D11_SDK_VERSION, &g_device, nullptr, &g_ctx);
+    IDXGIDevice* dxgi = nullptr;
+    IDXGIFactory2* factory = nullptr;
+    if (SUCCEEDED(hr)) hr = g_device->QueryInterface(IID_PPV_ARGS(&dxgi));
+    if (SUCCEEDED(hr)) hr = CreateDXGIFactory2(0, IID_PPV_ARGS(&factory));
+    if (SUCCEEDED(hr)) {
+        DXGI_SWAP_CHAIN_DESC1 sd{};
+        sd.Width = w;
+        sd.Height = h;
+        sd.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+        sd.SampleDesc.Count = 1;
+        sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        sd.BufferCount = 2;
+        sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+        sd.AlphaMode = DXGI_ALPHA_MODE_PREMULTIPLIED;
+        hr = factory->CreateSwapChainForComposition(dxgi, &sd, nullptr, &g_swapchain);
+    }
+    if (SUCCEEDED(hr)) hr = DCompositionCreateDevice(dxgi, IID_PPV_ARGS(&g_dcomp));
+    if (SUCCEEDED(hr)) hr = g_dcomp->CreateTargetForHwnd(hwnd, TRUE, &g_dcomp_target);
+    if (SUCCEEDED(hr)) hr = g_dcomp->CreateVisual(&g_dcomp_visual);
+    if (SUCCEEDED(hr)) hr = g_dcomp_visual->SetContent(g_swapchain);
+    if (SUCCEEDED(hr)) hr = g_dcomp_target->SetRoot(g_dcomp_visual);
+    if (SUCCEEDED(hr)) hr = g_dcomp->Commit();
+    release(factory);
+    release(dxgi);
     if (FAILED(hr)) {
-        log::error("overlay: D3D11CreateDeviceAndSwapChain failed: {:#x}", static_cast<unsigned>(hr));
+        log::error("overlay: D3D11/DirectComposition setup failed: {:#x}", static_cast<unsigned>(hr));
         return false;
     }
     g_width = w;
@@ -120,6 +139,9 @@ bool create_device(HWND hwnd, UINT w, UINT h) {
 
 void destroy_device() {
     release(g_rtv);
+    release(g_dcomp_visual);
+    release(g_dcomp_target);
+    release(g_dcomp);
     release(g_swapchain);
     release(g_ctx);
     release(g_device);
@@ -276,12 +298,7 @@ void render_frame() {
     draw_notice();
     if (g_menu_open.load()) draw_menu();
     ImGui::Render();
-    // Black = transparent via color key, and keyed pixels are also *not hit-testable*: a
-    // drag whose cursor outruns the menu by a frame lands on the game and ImGui loses the
-    // move. While the menu is open clear to RGB(1,1,1) instead: invisibly dim, but every
-    // pixel is ours, so all mouse input (and SetCapture) reaches ImGui.
-    const float k = g_menu_open.load() ? 1.f / 255.f : 0.f;
-    const float clear[4] = {k, k, k, 1.f};
+    const float clear[4] = {0.f, 0.f, 0.f, 0.f};  // alpha 0 = game shows through
     g_ctx->OMSetRenderTargets(1, &g_rtv, nullptr);
     g_ctx->ClearRenderTargetView(g_rtv, clear);
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
@@ -308,8 +325,8 @@ DWORD WINAPI ui_thread(LPVOID) {
     }
     UINT w = static_cast<UINT>(r.right - r.left), h = static_cast<UINT>(r.bottom - r.top);
 
-    // Layered + transparent + topmost + no-activate tool window: draws over the game,
-    // starts click-through, never steals focus until the menu opens.
+    // Layered + transparent + topmost + no-activate tool window: draws over the
+    // game, starts click-through, never steals focus until the menu opens.
     g_hwnd = CreateWindowExW(
         WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
         wc.lpszClassName, L"YapNotifier", WS_POPUP, r.left, r.top, static_cast<int>(w), static_cast<int>(h),
@@ -319,7 +336,9 @@ DWORD WINAPI ui_thread(LPVOID) {
         UnregisterClassW(wc.lpszClassName, wc.hInstance);
         return 0;
     }
-    SetLayeredWindowAttributes(g_hwnd, kColorKey, 0, LWA_COLORKEY);
+    SetLayeredWindowAttributes(g_hwnd, 0, 255, LWA_ALPHA);
+    const MARGINS glass{-1, -1, -1, -1};
+    DwmExtendFrameIntoClientArea(g_hwnd, &glass);
     ShowWindow(g_hwnd, SW_SHOWNOACTIVATE);
 
     if (!create_device(g_hwnd, w, h)) {

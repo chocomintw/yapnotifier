@@ -44,7 +44,7 @@ add_library(YapNotifier SHARED
   src/update.cpp
   YapNotifier.rc)  # FX_ASI_BUILD resources: FiveM refuses the .asi without them
 target_include_directories(YapNotifier PRIVATE shared)
-target_link_libraries(YapNotifier PRIVATE imgui ws2_32 winhttp bcrypt)
+target_link_libraries(YapNotifier PRIVATE imgui ws2_32 winhttp bcrypt dcomp dwmapi)
 target_compile_definitions(YapNotifier PRIVATE ${YAP_COMMON_DEFS})
 target_compile_options(YapNotifier PRIVATE ${YAP_COMMON_OPTS})
 set_target_properties(YapNotifier PROPERTIES PREFIX "" SUFFIX ".asi")
