@@ -56,6 +56,7 @@ std::thread g_thread;
 std::atomic<bool> g_stop{false};
 std::atomic<bool> g_ready{false};
 std::atomic<bool> g_menu_open{false};
+std::atomic<bool> g_visible{true};  // game in foreground: window shown + rendered
 
 // --- camera lock (borrowed from vlights) -------------------------------------
 // The game reads the mouse via process-wide raw input (RIDEV_INPUTSINK), so it
@@ -268,8 +269,20 @@ void draw_menu() {
     if (!host.open && g_menu_open.load()) PostMessageW(g_hwnd, WM_YAP_TOGGLE, 0, 0);  // window's [x]
 }
 
-// Keep our window aligned with the game and sized to its client area.
+// Keep our window aligned with the game and sized to its client area, and only
+// visible while the game (or our own menu) is in the foreground: TOPMOST would
+// otherwise float over every other app when the player tabs out.
 void track_game_window() {
+    static bool shown = true;
+    HWND game = FindWindowW(kGameWindowClass, nullptr);
+    HWND fg = GetForegroundWindow();
+    const bool visible = game && !IsIconic(game) && (fg == game || (fg == g_hwnd && g_menu_open.load()));
+    if (visible != shown) {
+        ShowWindow(g_hwnd, visible ? SW_SHOWNOACTIVATE : SW_HIDE);
+        shown = visible;
+        g_visible = visible;
+    }
+    if (!visible) return;
     RECT r{};
     if (!game_client_rect(r)) return;
     UINT w = static_cast<UINT>(r.right - r.left), h = static_cast<UINT>(r.bottom - r.top);
@@ -382,7 +395,7 @@ DWORD WINAPI ui_thread(LPVOID) {
             DispatchMessageW(&msg);
         }
         track_game_window();
-        render_frame();
+        if (g_visible.load()) render_frame();
         Sleep(16);  // ~60fps; ponytail: could idle when nothing is talking + menu closed
     }
 
