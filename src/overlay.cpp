@@ -2,6 +2,7 @@
 
 #include "log.h"
 #include "teamspeak.h"
+#include "theme.h"
 #include "update.h"
 #include "version.h"
 
@@ -197,6 +198,25 @@ LRESULT CALLBACK wndproc(HWND h, UINT m, WPARAM w, LPARAM l) {
     return DefWindowProcW(h, m, w, l);
 }
 
+// Quicksand from the RCDATA resource in YapNotifier.rc. Falls back to ImGui's built-in
+// ProggyClean if anything is off, so a bad resource never blanks the overlay.
+void load_font() {
+    HMODULE self = nullptr;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       reinterpret_cast<LPCWSTR>(&load_font), &self);
+    HRSRC res = self ? FindResourceW(self, L"YAP_FONT", RT_RCDATA) : nullptr;
+    HGLOBAL blob = res ? LoadResource(self, res) : nullptr;
+    void* data = blob ? LockResource(blob) : nullptr;
+    DWORD size = res ? SizeofResource(self, res) : 0;
+    if (!data || !size) {
+        log::error("overlay: font resource missing, using ImGui default");
+        return;
+    }
+    ImFontConfig fc;
+    fc.FontDataOwnedByAtlas = false;  // resource memory belongs to the module, never freed
+    ImGui::GetIO().Fonts->AddFontFromMemoryTTF(data, static_cast<int>(size), 19.f, &fc);
+}
+
 // --- ImGui content -----------------------------------------------------------
 void draw_talkers() {
     auto snap = ts::snapshot();
@@ -356,6 +376,8 @@ DWORD WINAPI ui_thread(LPVOID) {
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
     ImGui::StyleColorsDark();
+    SetDarkPastelImGuiStyle();
+    load_font();
     if (!ImGui_ImplWin32_Init(g_hwnd) || !ImGui_ImplDX11_Init(g_device, g_ctx)) {
         log::error("overlay: ImGui backend init failed");
         ImGui::DestroyContext();

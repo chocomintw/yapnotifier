@@ -23,6 +23,10 @@ FX_ASI_BUILD 3775 BEGIN "\0" END
 FX_ASI_BUILD 3788 BEGIN "\0" END
 FX_ASI_BUILD 3889 BEGIN "\0" END
 
+// UI font (OFL, licence in assets/OFL-Quicksand.txt), embedded so the single-file .asi
+// the updater ships stays self-contained. Loaded in overlay.cpp via FindResource.
+YAP_FONT RCDATA "assets/Quicksand-Regular.ttf"
+
 // Version resource: an unsigned binary with no version info weighs against it in Defender /
 // SmartScreen scoring, and gives a player who right-clicks the file nothing to look at.
 // Literal numbers rather than winver.h names so the .rc never needs an include path.
