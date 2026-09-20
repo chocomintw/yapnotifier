@@ -1,10 +1,11 @@
 #include "overlay.h"
 
+#include "hud.h"
 #include "log.h"
+#include "menu.h"
 #include "teamspeak.h"
 #include "theme.h"
 #include "update.h"
-#include "version.h"
 
 #include <Windows.h>
 #include <d3d11.h>
@@ -16,7 +17,9 @@
 #include <imgui_impl_dx11.h>
 #include <imgui_impl_win32.h>
 
+#include <algorithm>
 #include <atomic>
+#include <filesystem>
 #include <thread>
 #include <vector>
 
@@ -36,6 +39,8 @@ constexpr wchar_t kGameWindowClass[] = L"grcWindow";
 
 Config g_cfg;
 std::wstring g_ini;
+hud::State g_hud;
+ULONGLONG g_last_frame = 0;
 
 HWND g_hwnd = nullptr;
 ID3D11Device* g_device = nullptr;
@@ -198,9 +203,16 @@ LRESULT CALLBACK wndproc(HWND h, UINT m, WPARAM w, LPARAM l) {
     return DefWindowProcW(h, m, w, l);
 }
 
-// Quicksand from the RCDATA resource in YapNotifier.rc. Falls back to ImGui's built-in
-// ProggyClean if anything is off, so a bad resource never blanks the overlay.
+// `font_file` (relative to the plugins dir) if set, else Quicksand from the RCDATA
+// resource in YapNotifier.rc. Falls back to ImGui's built-in ProggyClean if anything
+// is off, so a bad font never blanks the overlay.
 void load_font() {
+    if (!g_cfg.font_file.empty()) {
+        std::filesystem::path p = g_cfg.font_file;
+        if (p.is_relative()) p = std::filesystem::path(g_ini).parent_path() / p;
+        if (ImGui::GetIO().Fonts->AddFontFromFileTTF(p.string().c_str(), g_cfg.font_size)) return;
+        log::error("overlay: could not load font {}, using Quicksand", p.string());
+    }
     HMODULE self = nullptr;
     GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                        reinterpret_cast<LPCWSTR>(&load_font), &self);
@@ -214,31 +226,23 @@ void load_font() {
     }
     ImFontConfig fc;
     fc.FontDataOwnedByAtlas = false;  // resource memory belongs to the module, never freed
-    ImGui::GetIO().Fonts->AddFontFromMemoryTTF(data, static_cast<int>(size), 19.f, &fc);
+    ImGui::GetIO().Fonts->AddFontFromMemoryTTF(data, static_cast<int>(size), g_cfg.font_size, &fc);
 }
 
 // --- ImGui content -----------------------------------------------------------
-void draw_talkers() {
-    auto snap = ts::snapshot();
-    if (snap->talking.empty()) return;
-    ImGui::SetNextWindowPos({g_cfg.pos_x, g_cfg.pos_y}, ImGuiCond_Always);
-    ImGui::SetNextWindowBgAlpha(g_cfg.opacity);
-    ImGui::Begin("##yap_talkers", nullptr,
-                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
-                     ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
-                     ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
-                     ImGuiWindowFlags_NoBringToFrontOnFocus);
-    ImGui::SetWindowFontScale(g_cfg.scale);
-    const float r = ImGui::GetTextLineHeight() * 0.3f;
-    for (const auto& c : snap->talking) {
-        ImVec2 p = ImGui::GetCursorScreenPos();
-        ImGui::GetWindowDrawList()->AddCircleFilled(
-            {p.x + r, p.y + ImGui::GetTextLineHeight() * 0.5f}, r, IM_COL32(80, 220, 80, 255));
-        ImGui::Dummy({r * 2 + 6.f, 0.f});
-        ImGui::SameLine();
-        ImGui::TextUnformatted(c.nickname.c_str());
+void draw_hud(float dt_ms, ULONGLONG now) {
+    static std::vector<ts::Event> events;
+    events.clear();
+    if (g_cfg.demo) {
+        hud::demo_tick(g_hud, g_cfg, now);
+        std::vector<ts::Event> dropped;
+        ts::drain_events(dropped);  // keep the real queue from piling up meanwhile
+        hud::draw(g_hud, g_cfg, hud::demo_snapshot(), dt_ms, now);
+        return;
     }
-    ImGui::End();
+    ts::drain_events(events);
+    hud::feed(g_hud, g_cfg, events, now);
+    hud::draw(g_hud, g_cfg, *ts::snapshot(), dt_ms, now);
 }
 
 void draw_notice() {
@@ -259,32 +263,9 @@ void draw_notice() {
 }
 
 void draw_menu() {
-    ImGui::SetNextWindowSize({420, 0}, ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowPos({g_cfg.pos_x, g_cfg.pos_y + 80}, ImGuiCond_FirstUseEver);
-    bool open = g_menu_open.load();
-    ImGui::Begin("YapNotifier v" YAP_VERSION, &open, ImGuiWindowFlags_AlwaysAutoResize);
-    auto snap = ts::snapshot();
-    ImGui::TextDisabled(snap->connected ? "TS3 plugin: connected"
-                                        : "TS3 plugin: not connected (enable the YapNotifier plugin in TeamSpeak)");
-    if (auto n = update::notice(); !n->empty()) ImGui::TextColored({1.f, 0.85f, 0.3f, 1.f}, "%s", n->c_str());
-    ImGui::Separator();
-    ImGui::InputInt("UDP port", &g_cfg.port);
-    ImGui::Checkbox("Auto-update on launch", &g_cfg.auto_update);
-    ImGui::Separator();
-    ImGui::SliderFloat("X", &g_cfg.pos_x, 0.f, ImGui::GetIO().DisplaySize.x);
-    ImGui::SliderFloat("Y", &g_cfg.pos_y, 0.f, ImGui::GetIO().DisplaySize.y);
-    ImGui::SliderFloat("Opacity", &g_cfg.opacity, 0.f, 1.f);
-    ImGui::SliderFloat("Scale", &g_cfg.scale, 0.5f, 3.f);
-    ImGui::Separator();
-    if (ImGui::Button("Save")) {
-        config::save(g_cfg, g_ini);
-        ts::configure(g_cfg.port);
-        log::info("overlay: config saved");
-    }
-    ImGui::SameLine();
-    ImGui::TextDisabled("INSERT toggles this menu");
-    ImGui::End();
-    if (!open && g_menu_open.load()) PostMessageW(g_hwnd, WM_YAP_TOGGLE, 0, 0);  // window's [x]
+    menu::Host host{g_cfg, g_ini, true, g_hud};
+    menu::draw(host);
+    if (!host.open && g_menu_open.load()) PostMessageW(g_hwnd, WM_YAP_TOGGLE, 0, 0);  // window's [x]
 }
 
 // Keep our window aligned with the game and sized to its client area.
@@ -311,10 +292,13 @@ void render_frame() {
     } else {
         ImGui::GetIO().MouseDrawCursor = false;
     }
+    const ULONGLONG now = GetTickCount64();
+    const float dt_ms = g_last_frame ? static_cast<float>(std::min<ULONGLONG>(now - g_last_frame, 250)) : 16.f;
+    g_last_frame = now;
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
-    draw_talkers();
+    draw_hud(dt_ms, now);
     draw_notice();
     if (g_menu_open.load()) draw_menu();
     ImGui::Render();

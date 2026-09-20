@@ -40,6 +40,11 @@ add_library(YapNotifier SHARED
   src/log.cpp
   src/config.cpp
   src/overlay.cpp
+  src/hud.cpp
+  src/icons.cpp
+  src/menu.cpp
+  src/notify.cpp
+  src/roster.cpp
   src/teamspeak.cpp
   src/update.cpp
   YapNotifier.rc)  # FX_ASI_BUILD resources: FiveM refuses the .asi without them
@@ -60,8 +65,8 @@ if(YAPNOTIFIER_DEPLOY_DIR)
 endif()
 
 # --- TeamSpeak side: yapnotifier_ts3_win64.dll packaged as YapNotifier.ts3_plugin
-add_library(yapnotifier_ts3 SHARED ts3plugin/plugin.cpp)
-target_include_directories(yapnotifier_ts3 PRIVATE shared ${ts3sdk_SOURCE_DIR}/include)
+add_library(yapnotifier_ts3 SHARED ts3plugin/plugin.cpp ts3plugin/sqlite_read.cpp ts3plugin/ts_contacts.cpp)
+target_include_directories(yapnotifier_ts3 PRIVATE shared ts3plugin ${ts3sdk_SOURCE_DIR}/include)
 target_link_libraries(yapnotifier_ts3 PRIVATE ws2_32)
 target_compile_definitions(yapnotifier_ts3 PRIVATE ${YAP_COMMON_DEFS})
 target_compile_options(yapnotifier_ts3 PRIVATE ${YAP_COMMON_OPTS})
@@ -80,7 +85,7 @@ add_custom_target(ts3_package ALL
 
 # --- Tests --------------------------------------------------------------------
 enable_testing()
-add_executable(test_parser tests/test_parser.cpp src/teamspeak.cpp src/update.cpp src/log.cpp)
+add_executable(test_parser tests/test_parser.cpp src/teamspeak.cpp src/update.cpp src/log.cpp src/config.cpp src/notify.cpp src/roster.cpp)
 target_include_directories(test_parser PRIVATE src shared)
 target_link_libraries(test_parser PRIVATE ws2_32 winhttp bcrypt)
 target_compile_definitions(test_parser PRIVATE ${YAP_COMMON_DEFS})
