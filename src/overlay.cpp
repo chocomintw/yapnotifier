@@ -262,7 +262,7 @@ void draw_menu() {
         log::info("overlay: config saved");
     }
     ImGui::SameLine();
-    ImGui::TextDisabled("INSERT toggles this menu, END ejects the plugin");
+    ImGui::TextDisabled("INSERT toggles this menu");
     ImGui::End();
     if (!open && g_menu_open.load()) PostMessageW(g_hwnd, WM_YAP_TOGGLE, 0, 0);  // window's [x]
 }

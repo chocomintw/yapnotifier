@@ -27,7 +27,7 @@ Outputs: `build/Release/YapNotifier.asi`, `build/YapNotifier.ts3_plugin`. With `
 
 **Releasing:** bump `YAP_VERSION` / `YAP_VERSION_NUM` in `shared/version.h` (feeds the `.rc`, the TS3 plugin, and the updater) and `Version` in `ts3plugin/package.ini` (CI fails if they differ), then push a `v<version>` tag. The workflow builds, tests, and publishes a GitHub Release with `YapNotifier.asi` + `YapNotifier.ts3_plugin`; installed copies self-update from it.
 
-Only the datagram parser has a host-side test; hooks, overlay and the TS3 plugin can only be verified in-game / in-client. Runtime log: `<plugins>/YapNotifier.log`; settings: `<plugins>/YapNotifier.ini`. In-game: **INSERT** opens the config menu, **END** ejects the plugin (dev hot-reload).
+Only the datagram parser has a host-side test; hooks, overlay and the TS3 plugin can only be verified in-game / in-client. Runtime log: `<plugins>/YapNotifier.log`; settings: `<plugins>/YapNotifier.ini`. In-game: **INSERT** opens the config menu. There is no eject key; the plugin lives for the whole process.
 
 ## Architecture
 
@@ -36,7 +36,7 @@ Data flows one way: TeamSpeak -> plugin -> UDP -> `.asi` listener thread -> atom
 - **Wire format** (`shared/yap_protocol.h`, included by both sides): one UDP datagram to `127.0.0.1:25640` carrying the *complete* talking list (`YAP1\n` then `clid\tnickname\n` lines), sent on every change and as a 1 s heartbeat. No handshake — the `.asi` treats 3 s of silence as "plugin gone". Change the format in the header, the plugin's `send_state_locked`, `parse_datagram`, and `tests/test_parser.cpp` together.
 - **TS3 plugin** (`ts3plugin/plugin.cpp`): C++ over the C SDK; exports `ts3plugin_*`. `onTalkStatusChangeEvent` maintains a `(server, clid) -> nickname` map; move/kick/disconnect events evict clients that will never send "not talking". Includes the own client, sorted first.
 - **.asi threads:**
-  - *Init/eject* (`src/main.cpp`): spawned from `DllMain` (never work under the loader lock). Installs hooks, starts the listener, polls END, tears down in reverse order.
+  - *Init* (`src/main.cpp`): spawned from `DllMain` (never work under the loader lock). Starts the overlay and the listener, then polls the menu hotkey forever.
   - *Render* (`src/hooks.cpp` -> `src/overlay.cpp`): the game's thread, entered via MinHook detours on `IDXGISwapChain::Present` (slot 8) / `::ResizeBuffers` (slot 13). Vtable addresses come from a throwaway swapchain on a hidden window — every swapchain in the process shares dxgi's vtable, so no pattern scanning. `overlay` lazily inits ImGui from the real swapchain, subclasses the game window's WndProc, and must release the backbuffer RTV in `on_resize()` *before* the original ResizeBuffers runs.
   - *Listener* (`src/teamspeak.cpp`): binds the UDP port, parses datagrams, publishes immutable `Snapshot`s through one `std::atomic<std::shared_ptr<const Snapshot>>`. The render thread only ever calls `ts::snapshot()`.
 

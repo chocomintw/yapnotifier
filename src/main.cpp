@@ -18,14 +18,6 @@ std::filesystem::path module_path() {
     return buf;
 }
 
-void eject() {
-    yap::log::info("ejecting");
-    yap::overlay::stop();
-    yap::ts::stop();
-    yap::log::info("bye");
-    yap::log::close();
-}
-
 DWORD WINAPI init_thread(LPVOID) {
     const auto self = module_path();
     const auto dir = self.parent_path();
@@ -42,22 +34,17 @@ DWORD WINAPI init_thread(LPVOID) {
     yap::ts::start();
     yap::update::check_and_install(self, cfg.auto_update);
 
-    // Poll the menu hotkey and the END eject key. GetAsyncKeyState reads global
-    // state, so this works whether or not our window has focus.
-    bool menu_was_down = false, end_was_down = false;
+    // Poll the menu hotkey. GetAsyncKeyState reads global state, so this works whether
+    // or not our window has focus. There is deliberately no eject: the plugin lives
+    // for the whole process.
+    bool menu_was_down = false;
     for (;;) {
         bool menu_down = (GetAsyncKeyState(cfg.menu_key) & 0x8000) != 0;
         if (menu_down && !menu_was_down) yap::overlay::toggle_menu();
         menu_was_down = menu_down;
 
-        bool end_down = (GetAsyncKeyState(VK_END) & 0x8000) != 0;
-        if (end_down && !end_was_down) break;
-        end_was_down = end_down;
-
         Sleep(30);
     }
-    eject();
-    FreeLibraryAndExitThread(g_module, 0);
 }
 }  // namespace
 
