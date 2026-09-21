@@ -6,6 +6,9 @@ on:
     tags: ["v*"]
   pull_request:
 
+permissions:
+  contents: write  # the Release step creates the GitHub Release
+
 jobs:
   build:
     runs-on: windows-latest
