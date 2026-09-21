@@ -61,13 +61,17 @@ div { display: block; }
 }
 #toasts.accent .bar { display: block; }
 
-/* chat */
+/* chat: the same DESIGN.md card as the toasts; the sender prefix is the emphasised part */
 #chat {
-	padding: 6dp;
-	border-radius: 4dp;
-	font-size: 0.95em;
+	padding: 10dp 12dp;
+	border-width: 1dp;
+	border-radius: 8dp;
+	font-size: 0.9em;
+	font-effect: none;
 }
-.line { margin-bottom: 2dp; }
+.line { margin-bottom: 4dp; }
+.line:last-child { margin-bottom: 0; }
+.line .prefix { font-weight: 600; }
 
 /* updater banner */
 #notice {

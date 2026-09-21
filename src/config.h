@@ -140,8 +140,8 @@ struct Config {
     bool chat_channel = true, chat_server = false, chat_private = false, chat_poke = true;
     int chat_max_visible = 6, chat_history = 50, chat_retention_s = 300;
     bool chat_timestamp = true, chat_sender = true, chat_channel_name = false, chat_newest_top = false;
-    Color chat_sender_color = rgba(88, 166, 255);
-    Color chat_background = rgba(10, 12, 16, 170);
+    Color chat_sender_color = rgba(0x9f, 0xbb, 0xe0);  // DESIGN.md timeline blue, reads on both cards
+    Color chat_background = 0;                       // 0 = the theme's card colour
 
     std::map<std::string, UserOverride> users;      // by CLIENT_UNIQUE_IDENTIFIER
     std::map<uint64_t, ChannelOverride> channels;  // by channel id

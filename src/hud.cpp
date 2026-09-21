@@ -48,8 +48,9 @@ struct View {
     bool accent_bar = false;
     std::string notif_width = "280dp", notif_bg = "#FFFFFFFF", notif_border = "#E6E5E0FF", notif_text = "#26251EFF";
     std::vector<ToastView> toasts;
-    // chat
-    std::string chat_width = "420dp", chat_bg = "#00000000", chat_sender_color = "#FFFFFFFF";
+    // chat (same card as the toasts)
+    std::string chat_width = "420dp", chat_bg = "#FFFFFFFF", chat_border = "#E6E5E0FF", chat_text = "#26251EFF";
+    std::string chat_sender_color = "#FFFFFFFF";
     std::vector<ChatView> chat;
     std::string notice;
 };
@@ -173,15 +174,19 @@ float luminance(Color c) {
     return (0.299f * (c & 0xff) + 0.587f * ((c >> 8) & 0xff) + 0.114f * ((c >> 16) & 0xff)) / 255.f;
 }
 
+// DESIGN.md card tokens: light = card / hairline / ink, dark = its ink inversion. The theme
+// picks the card; a custom `custom` colour wins, and text/hairline then follow whatever the
+// card actually is (a user's black stays readable in the light theme).
+void card_colors(const Config& cfg, Color custom, std::string& bg, std::string& border, std::string& text) {
+    const Color c = custom ? custom : cfg.dark_theme ? rgba(0x26, 0x25, 0x1e) : rgba(0xff, 0xff, 0xff);
+    const bool dark = luminance(c) < 0.5f;
+    bg = hex(c);
+    border = hex(dark ? rgba(0x3a, 0x38, 0x30) : rgba(0xe6, 0xe5, 0xe0));
+    text = hex(dark ? rgba(0xf7, 0xf7, 0xf4) : rgba(0x26, 0x25, 0x1e));
+}
+
 void sync_toasts(View& v, State& st, const Config& cfg, float master) {
-    // DESIGN.md tokens: light = card / hairline / ink, dark = its ink inversion. The theme
-    // picks the card; a custom notif_background wins, and text/hairline then follow whatever
-    // the card actually is (a user's black stays readable in the light theme).
-    const Color bg = cfg.notif_background ? cfg.notif_background : cfg.dark_theme ? rgba(0x26, 0x25, 0x1e) : rgba(0xff, 0xff, 0xff);
-    const bool dark = luminance(bg) < 0.5f;
-    v.notif_bg = hex(bg);
-    v.notif_border = hex(dark ? rgba(0x3a, 0x38, 0x30) : rgba(0xe6, 0xe5, 0xe0));
-    v.notif_text = hex(dark ? rgba(0xf7, 0xf7, 0xf4) : rgba(0x26, 0x25, 0x1e));
+    card_colors(cfg, cfg.notif_background, v.notif_bg, v.notif_border, v.notif_text);
     v.toasts.clear();
     if (!cfg.notif_enabled) return;
     for (const auto& t : st.toasts.items()) {
@@ -307,6 +312,8 @@ bool init(Rml::Context& ctx) {
     m.Bind("toasts", &v.toasts);
     m.Bind("chat_width", &v.chat_width);
     m.Bind("chat_bg", &v.chat_bg);
+    m.Bind("chat_border", &v.chat_border);
+    m.Bind("chat_text", &v.chat_text);
     m.Bind("chat_sender_color", &v.chat_sender_color);
     m.Bind("chat", &v.chat);
     m.Bind("notice", &v.notice);
@@ -346,7 +353,7 @@ void sync(State& st, const Config& cfg, const ts::Snapshot& snap, float dt_ms, u
     v.accent_bar = cfg.notif_accent_bar;
     v.notif_width = dp(cfg.notif_width);
     v.chat_width = dp(cfg.chat_width);
-    v.chat_bg = hex(cfg.chat_background, master);
+    card_colors(cfg, cfg.chat_background, v.chat_bg, v.chat_border, v.chat_text);  // master goes on #chat's opacity
     v.chat_sender_color = hex(cfg.chat_sender_color);
     v.notice = notice;
     sync_roster(v, st, cfg, snap, master, static_cast<double>(now_ms) / 1000.0);

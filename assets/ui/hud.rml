@@ -31,7 +31,8 @@
 		</div>
 	</div>
 
-	<div id="chat" class="block" data-if="chat.size > 0" data-style-width="chat_width" data-style-background-color="chat_bg">
+	<div id="chat" class="block" data-if="chat.size > 0" data-style-width="chat_width" data-style-background-color="chat_bg"
+	     data-style-border-color="chat_border" data-style-color="chat_text">
 		<div class="line" data-for="l : chat"><span class="prefix" data-style-color="chat_sender_color">{{l.prefix}}</span>{{l.body}}</div>
 	</div>
 

@@ -325,11 +325,17 @@ void track_game_window() {
     static bool shown = true;
     HWND game = game_window();
     // "Foreground" = any window of this process: the game, our overlay, or whatever FiveM
-    // has up. Tying it to the menu state blinked the HUD on close, while the foreground
-    // handoff from our window back to the game was still in flight.
+    // has up. During the SetForegroundWindow handoff between our window and the game
+    // (menu open/close) GetForegroundWindow() is briefly NULL, so a foreign foreground
+    // only hides us once it has outlasted that gap; showing is immediate.
+    static ULONGLONG foreign_since = 0;
     DWORD fg_pid = 0;
     GetWindowThreadProcessId(GetForegroundWindow(), &fg_pid);
-    const bool visible = game && !IsIconic(game) && fg_pid == GetCurrentProcessId();
+    const bool ours = fg_pid == GetCurrentProcessId();
+    const ULONGLONG now = GetTickCount64();
+    if (ours) foreign_since = 0;
+    else if (!foreign_since) foreign_since = now;
+    const bool visible = game && !IsIconic(game) && (ours || now - foreign_since < 250);
     if (visible != shown) {
         ShowWindow(g_hwnd, visible ? SW_SHOWNOACTIVATE : SW_HIDE);
         shown = visible;

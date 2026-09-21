@@ -132,7 +132,7 @@
 	<div class="row"><span class="label">Retention (s, 0 = forever)</span><input type="range" min="0" max="3600" step="10" data-value="chat_retention_s"/><span class="val">{{chat_retention_s}}</span></div>
 	<div class="row"><input type="checkbox" data-checked="chat_timestamp"/> Timestamp <input type="checkbox" data-checked="chat_sender"/> Sender <input type="checkbox" data-checked="chat_channel_name"/> Channel name <input type="checkbox" data-checked="chat_newest_top"/> Newest on top</div>
 	<div class="row"><span class="label">Sender colour</span><colorpicker data-value="chat_sender_color"/></div>
-	<div class="row"><span class="label">Background</span><colorpicker data-value="chat_background"/></div>
+	<div class="row"><span class="label">Background</span><colorpicker optional data-value="chat_background"/></div>
 </panel>
 
 <tab>Users</tab>
