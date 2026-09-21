@@ -3,8 +3,8 @@
 #ifndef YAP_VERSION_H
 #define YAP_VERSION_H
 
-#define YAP_VERSION     "0.2.0"
-#define YAP_VERSION_NUM 0,2,0,0
+#define YAP_VERSION     "0.2.1"
+#define YAP_VERSION_NUM 0,2,1,0
 
 #define YAP_GITHUB_REPO "chocomintw/yapnotifier"
 

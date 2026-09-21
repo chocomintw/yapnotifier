@@ -51,11 +51,13 @@ IDCompositionVisual* g_dcomp_visual = nullptr;
 ID3D11RenderTargetView* g_rtv = nullptr;
 UINT g_width = 0, g_height = 0;
 
-// RmlUi: one context holding the HUD document (always shown) and the menu document.
+// RmlUi: the HUD context (always shown, dp ratio = cfg.scale) and the menu context (ratio 1,
+// so the Scale slider never resizes the menu it lives in).
 std::optional<SystemInterface_Win32> g_system;
 std::optional<RenderInterface_DX11> g_renderer;
 TextInputMethodEditor_Win32 g_ime;
-Rml::Context* g_rml = nullptr;
+Rml::Context* g_rml = nullptr;       // HUD, dp ratio = cfg.scale
+Rml::Context* g_menu_ctx = nullptr;  // menu, dp ratio 1
 std::optional<menu::Host> g_menu_host;
 
 std::thread g_thread;
@@ -277,7 +279,7 @@ LRESULT CALLBACK wndproc(HWND h, UINT m, WPARAM w, LPARAM l) {
             return 0;
     }
     // Input only reaches us while the menu is open (closed, the window is click-through).
-    if (g_rml && !RmlWin32::WindowProcedure(g_rml, g_ime, h, m, w, l)) return 0;
+    if (g_menu_ctx && !RmlWin32::WindowProcedure(g_menu_ctx, g_ime, h, m, w, l)) return 0;
     return DefWindowProcW(h, m, w, l);
 }
 
@@ -354,6 +356,7 @@ void track_game_window() {
             create_rtv();
             g_renderer->SetViewport(static_cast<int>(w), static_cast<int>(h));
             g_rml->SetDimensions({static_cast<int>(w), static_cast<int>(h)});
+            g_menu_ctx->SetDimensions({static_cast<int>(w), static_cast<int>(h)});
         }
     }
 }
@@ -372,6 +375,7 @@ void render_frame() {
         if (!g_menu_host->open) PostMessageW(g_hwnd, WM_YAP_TOGGLE, 0, 0);  // window's [x]
     }
     g_rml->Update();
+    g_menu_ctx->Update();
 
     // Alpha 0 = game shows through; the backend composites its (transparent-cleared)
     // layer onto this with premultiplied ONE/INV_SRC_ALPHA, so untouched pixels stay 0.
@@ -380,6 +384,7 @@ void render_frame() {
     g_ctx->ClearRenderTargetView(g_rtv, clear);
     g_renderer->BeginFrame();
     g_rml->Render();
+    g_menu_ctx->Render();  // on top of the HUD
     g_renderer->EndFrame(g_rtv);
     g_swapchain->Present(0, 0);  // no vsync: never contend with the game's swapchain
 }
@@ -399,21 +404,24 @@ bool init_rml(UINT w, UINT h) {
     Rml::SetTextInputHandler(&g_ime);
     colorpicker::register_element();
     load_font();
+    // Two contexts: `scale` is the HUD context's dp ratio, so the menu (its own context at
+    // ratio 1) keeps its size and place while the slider is dragged.
     g_rml = Rml::CreateContext("yap", {static_cast<int>(w), static_cast<int>(h)});
-    if (!g_rml) {
+    g_menu_ctx = Rml::CreateContext("menu", {static_cast<int>(w), static_cast<int>(h)});
+    if (!g_rml || !g_menu_ctx) {
         log::error("overlay: Rml::CreateContext failed");
         return false;
     }
     g_rml->SetDensityIndependentPixelRatio(g_cfg.scale);
     if (!hud::init(*g_rml)) return false;
     g_menu_host.emplace(menu::Host{g_cfg, g_ini, false, g_hud});
-    return menu::init(*g_menu_host, *g_rml);
+    return menu::init(*g_menu_host, *g_menu_ctx);
 }
 
 void shutdown_rml() {
     if (Rml::GetTextInputHandler() == &g_ime) Rml::SetTextInputHandler(nullptr);
     Rml::Shutdown();
-    g_rml = nullptr;
+    g_rml = g_menu_ctx = nullptr;
     g_menu_host.reset();
     g_renderer.reset();
     g_system.reset();
