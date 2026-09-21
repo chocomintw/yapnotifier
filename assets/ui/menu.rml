@@ -1,0 +1,189 @@
+<rml>
+<head>
+	<title>YapNotifier</title>
+	<link type="text/rcss" href="theme.rcss"/>
+</head>
+<body id="menu" data-model="cfg">
+<handle move_target="#menu"><div class="titlebar">{{version}}<button class="close" data-event-click="close()">x</button></div></handle>
+<tabset id="tabs">
+
+<tab>Status</tab>
+<panel>
+	<p class="warn" data-if="!alive">TS3 plugin: not connected (enable the YapNotifier plugin in TeamSpeak)</p>
+	<p class="warn" data-if="alive && legacy">TS3 plugin is outdated: install YapNotifier.ts3_plugin from the release</p>
+	<p class="dim" data-if="alive && !legacy">TS3 plugin: connected</p>
+	<p class="warn" data-if="notice != ''">{{notice}}</p>
+	<div data-if="conn == 2"><p>Server: {{server}}</p><p>Channel: {{parent}}{{parent != '' ? ' / ' : ''}}{{channel}} ({{count}})</p></div>
+	<p class="dim" data-if="conn == 1">Connecting...</p>
+	<p class="dim" data-if="conn == 0">Not connected to a server</p>
+	<hr/>
+	<div class="row"><input type="checkbox" data-checked="demo"/> Demo mode (fake roster + events, no TeamSpeak needed)</div>
+	<div class="row"><span class="label">UDP port</span><input type="text" class="num" data-value="port"/></div>
+	<div class="row"><input type="checkbox" data-checked="auto_update"/> Auto-update on launch</div>
+	<p class="dim">{{key_name}} toggles this menu (menu_key in the ini)</p>
+</panel>
+
+<tab>Layout</tab>
+<panel>
+	<h2>Roster block</h2>
+	<div class="row"><span class="label">Anchor</span><select data-value="anchor"><option data-for="n : anchor_names" data-attr-value="it_index">{{n}}</option></select></div>
+	<div class="row"><span class="label">Offset X</span><input type="range" min="0" max="4000" step="1" data-value="pos_x"/><span class="val">{{pos_x}} px</span></div>
+	<div class="row"><span class="label">Offset Y</span><input type="range" min="0" max="4000" step="1" data-value="pos_y"/><span class="val">{{pos_y}} px</span></div>
+	<div class="row"><input type="checkbox" data-checked="show_panel"/> Background panel</div>
+	<div data-if="show_panel">
+		<div class="row"><span class="label">Panel colour</span><colorpicker data-value="panel_color"/></div>
+		<div class="row"><span class="label">Corner radius</span><input type="range" min="0" max="32" step="1" data-value="corner_radius"/><span class="val">{{corner_radius}}</span></div>
+	</div>
+	<h2>Look</h2>
+	<div class="row"><span class="label">Master opacity</span><input type="range" min="0" max="1" step="0.01" data-value="master_opacity"/><span class="val">{{master_opacity}}</span></div>
+	<div class="row"><span class="label">Scale</span><input type="range" min="0.25" max="4" step="0.05" data-value="scale"/><span class="val">{{scale}}</span></div>
+	<div class="row"><span class="label">Icon size</span><input type="range" min="2" max="96" step="1" data-value="icon_size"/><span class="val">{{icon_size}}</span></div>
+	<div class="row"><span class="label">Row spacing</span><input type="range" min="0" max="64" step="1" data-value="row_spacing"/><span class="val">{{row_spacing}}</span></div>
+	<div class="row"><input type="checkbox" data-checked="text_shadow"/> Text shadow <input type="checkbox" data-checked="text_outline"/> Text outline</div>
+	<div class="row"><span class="label">Text colour</span><colorpicker data-value="text_color"/></div>
+	<div class="row"><span class="label">Secondary text</span><colorpicker data-value="text_secondary"/></div>
+	<h2>Font</h2>
+	<div class="row"><span class="label">Font file</span><input type="text" data-value="font_file"/></div>
+	<p class="dim">.ttf relative to the plugins dir, empty = Quicksand; applies on next launch</p>
+	<div class="row"><span class="label">Font size</span><input type="range" min="6" max="96" step="1" data-value="font_size"/><span class="val">{{font_size}} px</span></div>
+	<h2>Idle</h2>
+	<div class="row"><input type="checkbox" data-checked="fade_when_idle"/> Fade when idle</div>
+	<div data-if="fade_when_idle">
+		<div class="row"><span class="label">Idle after (ms)</span><input type="range" min="1000" max="120000" step="500" data-value="idle_after_ms"/><span class="val">{{idle_after_ms}}</span></div>
+		<div class="row"><span class="label">Idle opacity</span><input type="range" min="0" max="1" step="0.01" data-value="idle_opacity"/><span class="val">{{idle_opacity}}</span></div>
+	</div>
+</panel>
+
+<tab>Roster</tab>
+<panel>
+	<h2>Title</h2>
+	<div class="row"><input type="checkbox" data-checked="show_title"/> Show channel title</div>
+	<div class="row"><input type="checkbox" data-checked="show_parent"/> Parent channel <input type="checkbox" data-checked="show_count"/> User count <input type="checkbox" data-checked="show_server"/> Server name</div>
+	<div class="row"><span class="label">Title format</span><input type="text" data-value="title_format"/></div>
+	<p class="dim">{channel} {parent} {server} {count}</p>
+	<div class="row"><span class="label">Disconnected text</span><input type="text" data-value="disconnected_text"/></div>
+	<div class="row"><span class="label">Title colour</span><colorpicker data-value="title_color"/></div>
+	<div class="row"><input type="checkbox" data-checked="show_when_disconnected"/> Draw while disconnected</div>
+	<h2>List</h2>
+	<div class="row"><input type="checkbox" data-checked="only_show_talking"/> Stealth: only show who is talking</div>
+	<div class="row"><input type="checkbox" data-checked="show_muted_users"/> Show muted users</div>
+	<div class="row"><input type="checkbox" data-checked="show_local_user"/> Show yourself <input type="checkbox" data-checked="highlight_local_user"/> Highlight yourself</div>
+	<div class="row"><span class="label">Your colour</span><colorpicker data-value="local_user_color"/></div>
+	<div class="row"><span class="label">Sort</span><select data-value="sort"><option data-for="n : sort_names" data-attr-value="it_index">{{n}}</option></select></div>
+	<div class="row"><span class="label">Max visible users</span><input type="range" min="1" max="64" step="1" data-value="max_visible_users"/><span class="val">{{max_visible_users}}</span></div>
+	<div class="row"><input type="checkbox" data-checked="show_overflow_count"/> Show "+N more"</div>
+	<div class="row"><span class="label">Max name width</span><input type="range" min="20" max="800" step="1" data-value="max_name_width"/><span class="val">{{max_name_width}} px</span></div>
+	<h2>Friends (from the TeamSpeak contact list)</h2>
+	<div class="row"><input type="checkbox" data-checked="color_friends"/> Colour friends <colorpicker data-value="friend_color"/></div>
+	<div class="row"><input type="checkbox" data-checked="show_friend_tag"/> Show contact nickname tag <colorpicker data-value="friend_tag_color"/></div>
+	<h2>Speaking animation</h2>
+	<div class="row"><span class="label">Attack (ms)</span><input type="range" min="0" max="1000" step="10" data-value="speaking_attack_ms"/><span class="val">{{speaking_attack_ms}}</span></div>
+	<div class="row"><span class="label">Release (ms)</span><input type="range" min="0" max="2000" step="10" data-value="speaking_release_ms"/><span class="val">{{speaking_release_ms}}</span></div>
+	<div class="row"><input type="checkbox" data-checked="pulse"/> Pulse speaking icon</div>
+	<div class="row" data-if="pulse"><span class="label">Pulse Hz</span><input type="range" min="0.1" max="10" step="0.1" data-value="pulse_hz"/><span class="val">{{pulse_hz}}</span></div>
+</panel>
+
+<tab>Indicators</tab>
+<panel>
+	<p class="dim">Commander / priority speaker icons lead the name; the rest trail it.</p>
+	<div class="ind" data-for="i : ind">
+		<div class="row"><input type="checkbox" data-checked="i.enabled"/> <b>{{ind_names[it_index]}}</b></div>
+		<div class="row"><span class="label">Icon</span><select data-value="i.icon"><option data-for="n : icon_names" data-attr-value="it_index">{{n}}</option></select><colorpicker data-value="i.icon_color"/></div>
+		<div class="row"><span class="label">Name colour</span><colorpicker optional data-value="i.text_color"/></div>
+		<div class="row"><span class="label">Dim row</span><input type="range" min="0" max="1" step="0.01" data-value="i.dim"/><span class="val">{{i.dim}}</span></div>
+	</div>
+</panel>
+
+<tab>Notifications</tab>
+<panel>
+	<div class="row"><input type="checkbox" data-checked="notif_enabled"/> Enabled</div>
+	<div class="row"><span class="label">Anchor</span><select data-value="notif_anchor"><option data-for="n : anchor_names" data-attr-value="it_index">{{n}}</option></select></div>
+	<div class="row"><span class="label">Offset X</span><input type="range" min="0" max="4000" step="1" data-value="notif_x"/><span class="val">{{notif_x}} px</span></div>
+	<div class="row"><span class="label">Offset Y</span><input type="range" min="0" max="4000" step="1" data-value="notif_y"/><span class="val">{{notif_y}} px</span></div>
+	<div class="row"><span class="label">Width</span><input type="range" min="80" max="1200" step="1" data-value="notif_width"/><span class="val">{{notif_width}} px</span></div>
+	<div class="row"><span class="label">Max visible</span><input type="range" min="1" max="20" step="1" data-value="notif_max_visible"/><span class="val">{{notif_max_visible}}</span></div>
+	<div class="row"><input type="checkbox" data-checked="notif_stack_up"/> Stack upwards <input type="checkbox" data-checked="notif_merge_duplicates"/> Merge duplicates <input type="checkbox" data-checked="notif_accent_bar"/> Accent bar</div>
+	<div class="row"><span class="label">Fade in (ms)</span><input type="range" min="0" max="2000" step="10" data-value="notif_in_ms"/><span class="val">{{notif_in_ms}}</span></div>
+	<div class="row"><span class="label">Fade out (ms)</span><input type="range" min="0" max="2000" step="10" data-value="notif_out_ms"/><span class="val">{{notif_out_ms}}</span></div>
+	<div class="row"><span class="label">Quiet after connect (ms)</span><input type="range" min="0" max="20000" step="100" data-value="notif_suppress_after_connect_ms"/><span class="val">{{notif_suppress_after_connect_ms}}</span></div>
+	<div class="row"><span class="label">Background</span><colorpicker data-value="notif_background"/></div>
+	<h2>Categories</h2>
+	<div class="ind" data-for="n : notif">
+		<div class="row"><input type="checkbox" data-checked="n.enabled"/> <b>{{notif_names[it_index]}}</b><colorpicker data-value="n.color"/></div>
+		<div class="row"><span class="label">Format</span><input type="text" data-value="n.format"/></div>
+		<div class="row"><span class="label">Hold (ms)</span><input type="range" min="0" max="30000" step="100" data-value="n.hold_ms"/><span class="val">{{n.hold_ms}}</span></div>
+	</div>
+	<p class="dim">Placeholders: {name} {channel} {from} {to} {previous} {count} {status} {server} {message}</p>
+</panel>
+
+<tab>Chat</tab>
+<panel>
+	<div class="row"><input type="checkbox" data-checked="chat_enabled"/> Show chat feed</div>
+	<div class="row"><span class="label">Anchor</span><select data-value="chat_anchor"><option data-for="n : anchor_names" data-attr-value="it_index">{{n}}</option></select></div>
+	<div class="row"><span class="label">Offset X</span><input type="range" min="0" max="4000" step="1" data-value="chat_x"/><span class="val">{{chat_x}} px</span></div>
+	<div class="row"><span class="label">Offset Y</span><input type="range" min="0" max="4000" step="1" data-value="chat_y"/><span class="val">{{chat_y}} px</span></div>
+	<div class="row"><span class="label">Width</span><input type="range" min="80" max="1600" step="1" data-value="chat_width"/><span class="val">{{chat_width}} px</span></div>
+	<h2>Categories</h2>
+	<div class="row"><input type="checkbox" data-checked="chat_channel"/> Channel <input type="checkbox" data-checked="chat_server"/> Server <input type="checkbox" data-checked="chat_private"/> Private <input type="checkbox" data-checked="chat_poke"/> Pokes</div>
+	<h2>Lines</h2>
+	<div class="row"><span class="label">Visible lines</span><input type="range" min="1" max="30" step="1" data-value="chat_max_visible"/><span class="val">{{chat_max_visible}}</span></div>
+	<div class="row"><span class="label">History</span><input type="range" min="1" max="500" step="1" data-value="chat_history"/><span class="val">{{chat_history}}</span></div>
+	<div class="row"><span class="label">Retention (s, 0 = forever)</span><input type="range" min="0" max="3600" step="10" data-value="chat_retention_s"/><span class="val">{{chat_retention_s}}</span></div>
+	<div class="row"><input type="checkbox" data-checked="chat_timestamp"/> Timestamp <input type="checkbox" data-checked="chat_sender"/> Sender <input type="checkbox" data-checked="chat_channel_name"/> Channel name <input type="checkbox" data-checked="chat_newest_top"/> Newest on top</div>
+	<div class="row"><span class="label">Sender colour</span><colorpicker data-value="chat_sender_color"/></div>
+	<div class="row"><span class="label">Background</span><colorpicker data-value="chat_background"/></div>
+</panel>
+
+<tab>Users</tab>
+<panel>
+	<p class="dim">People in your channel</p>
+	<p class="dim" data-if="people.size == 0">(nobody: connect to TeamSpeak or enable demo mode)</p>
+	<div class="pick" data-for="p : people" data-class-sel="p.uid == selected" data-event-click="select_user(p.uid)">{{p.nickname}}<span class="dim" data-if="p.customised"> (customised)</span></div>
+	<div data-if="users.size > 0"><p class="dim">Customised users</p>
+		<div class="pick" data-for="u : users" data-if="!u.present" data-class-sel="u.uid == selected" data-event-click="select_user(u.uid)">{{u.label}}</div>
+	</div>
+	<div data-for="u : users" data-if="u.uid == selected">
+		<hr/>
+		<p>Customise {{u.uid}}</p>
+		<div class="row"><span class="label">Name colour</span><colorpicker optional data-value="u.v.name_color"/></div>
+		<div class="row"><span class="label">Speaking colour</span><colorpicker optional data-value="u.v.speaking_color"/></div>
+		<div class="row"><span class="label">Icon</span><select data-value="u.v.icon"><option data-for="n : icon_names" data-attr-value="it_index">{{n}}</option></select><colorpicker data-value="u.v.icon_color"/></div>
+		<div class="row"><span class="label">Display name</span><input type="text" data-value="u.v.display_name"/></div>
+		<div class="row"><span class="label">Friend</span><select data-value="u.v.is_friend"><option value="-1">As TeamSpeak says</option><option value="1">Friend</option><option value="0">Not a friend</option></select></div>
+		<div class="row"><span class="label">Friend tag</span><input type="text" data-value="u.v.friend_tag"/></div>
+		<button data-event-click="remove_user(u.uid)">Remove override</button>
+	</div>
+</panel>
+
+<tab>Channel</tab>
+<panel>
+	<p class="dim" data-if="conn != 2">Join a channel to customise it.</p>
+	<div data-if="conn == 2"><p>Current channel: {{channel}} (id {{channel_id}})</p>
+		<button data-if="!channel_customised" data-event-click="customise_channel()">Customise this channel</button>
+	</div>
+	<div class="ind" data-for="ch : channels">
+		<p><b>{{ch.label}}</b></p>
+		<div class="row"><span class="label">Title colour</span><colorpicker optional data-value="ch.v.title_color"/></div>
+		<div class="row"><span class="label">Display name</span><input type="text" data-value="ch.v.display_name"/></div>
+		<div class="row"><span class="label">Icon</span><select data-value="ch.v.icon"><option data-for="n : icon_names" data-attr-value="it_index">{{n}}</option></select><colorpicker data-value="ch.v.icon_color"/></div>
+		<div class="row"><span class="label">Opacity (-1 = default)</span><input type="range" min="-1" max="1" step="0.01" data-value="ch.v.opacity"/><span class="val">{{ch.v.opacity}}</span></div>
+		<button data-event-click="remove_channel(ch.id)">Remove override</button>
+	</div>
+</panel>
+
+<tab>Profiles</tab>
+<panel>
+	<p class="dim">A profile is a saved copy of the current settings.</p>
+	<div class="row" data-for="p : profiles">{{p}} <button data-event-click="profile_load(p)">Load</button><button data-event-click="profile_overwrite(p)">Overwrite</button><button data-event-click="profile_delete(p)">Delete</button></div>
+	<hr/>
+	<div class="row"><span class="label">New profile name</span><input type="text" data-value="new_profile"/><button data-event-click="profile_save_as()">Save as</button></div>
+	<p class="dim" data-if="status != ''">{{status}}</p>
+</panel>
+
+</tabset>
+<div class="footer">
+	<button data-event-click="save()">Save</button><button data-event-click="reload()">Reload from disk</button><button data-event-click="reset()">Reset to defaults</button>
+	<span class="dim">edits apply live; Save writes YapNotifier.ini</span>
+</div>
+</body>
+</rml>

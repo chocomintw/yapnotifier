@@ -1,10 +1,11 @@
 #include "overlay.h"
 
+#include "colorpicker.h"
 #include "hud.h"
 #include "log.h"
 #include "menu.h"
 #include "teamspeak.h"
-#include "theme.h"
+#include "ui_files.h"
 #include "update.h"
 
 #include <Windows.h>
@@ -13,17 +14,16 @@
 #include <dwmapi.h>
 #include <dxgi1_2.h>
 
-#include <imgui.h>
-#include <imgui_impl_dx11.h>
-#include <imgui_impl_win32.h>
+#include <RmlUi/Core.h>
+#include <RmlUi_Platform_Win32.h>
+#include <RmlUi_Renderer_DX11.h>
 
 #include <algorithm>
 #include <atomic>
 #include <filesystem>
+#include <optional>
 #include <thread>
 #include <vector>
-
-extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND, UINT, WPARAM, LPARAM);
 
 namespace {
 using namespace yap;
@@ -51,6 +51,13 @@ IDCompositionTarget* g_dcomp_target = nullptr;
 IDCompositionVisual* g_dcomp_visual = nullptr;
 ID3D11RenderTargetView* g_rtv = nullptr;
 UINT g_width = 0, g_height = 0;
+
+// RmlUi: one context holding the HUD document (always shown) and the menu document.
+std::optional<SystemInterface_Win32> g_system;
+std::optional<RenderInterface_DX11> g_renderer;
+TextInputMethodEditor_Win32 g_ime;
+Rml::Context* g_rml = nullptr;
+std::optional<menu::Host> g_menu_host;
 
 std::thread g_thread;
 std::atomic<bool> g_stop{false};
@@ -174,12 +181,15 @@ void set_click_through(bool on) {
 }
 
 LRESULT CALLBACK wndproc(HWND h, UINT m, WPARAM w, LPARAM l) {
-    if (ImGui_ImplWin32_WndProcHandler(h, m, w, l)) return 1;
     switch (m) {
         case WM_YAP_TOGGLE: {
             bool open = !g_menu_open.load();
             g_menu_open = open;
             set_click_through(!open);
+            if (g_menu_host) {
+                g_menu_host->open = open;
+                menu::show(open);
+            }
             if (open) {
                 SetForegroundWindow(h);
                 SetFocus(h);
@@ -190,83 +200,50 @@ LRESULT CALLBACK wndproc(HWND h, UINT m, WPARAM w, LPARAM l) {
             }
             return 0;
         }
-        case WM_SETCURSOR:
-            if (LOWORD(l) == HTCLIENT) {
-                SetCursor(nullptr);  // ImGui draws its own cursor
-                return TRUE;
-            }
-            break;
         case WM_DESTROY:
             restore_game_mouse();
             PostQuitMessage(0);
             return 0;
     }
+    // Input only reaches us while the menu is open (closed, the window is click-through).
+    if (g_rml && !RmlWin32::WindowProcedure(g_rml, g_ime, h, m, w, l)) return 0;
     return DefWindowProcW(h, m, w, l);
 }
 
 // `font_file` (relative to the plugins dir) if set, else Quicksand from the RCDATA
-// resource in YapNotifier.rc. Falls back to ImGui's built-in ProggyClean if anything
-// is off, so a bad font never blanks the overlay.
+// resource in YapNotifier.rc. Both register as family "Yap", which the RCSS uses.
 void load_font() {
     if (!g_cfg.font_file.empty()) {
         std::filesystem::path p = g_cfg.font_file;
         if (p.is_relative()) p = std::filesystem::path(g_ini).parent_path() / p;
-        if (ImGui::GetIO().Fonts->AddFontFromFileTTF(p.string().c_str(), g_cfg.font_size)) return;
+        if (Rml::LoadFontFace(p.string(), "Yap", Rml::Style::FontStyle::Normal, Rml::Style::FontWeight::Normal)) return;
         log::error("overlay: could not load font {}, using Quicksand", p.string());
     }
-    HMODULE self = nullptr;
-    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                       reinterpret_cast<LPCWSTR>(&load_font), &self);
-    HRSRC res = self ? FindResourceW(self, L"YAP_FONT", RT_RCDATA) : nullptr;
-    HGLOBAL blob = res ? LoadResource(self, res) : nullptr;
-    void* data = blob ? LockResource(blob) : nullptr;
-    DWORD size = res ? SizeofResource(self, res) : 0;
-    if (!data || !size) {
-        log::error("overlay: font resource missing, using ImGui default");
-        return;
-    }
-    ImFontConfig fc;
-    fc.FontDataOwnedByAtlas = false;  // resource memory belongs to the module, never freed
-    ImGui::GetIO().Fonts->AddFontFromMemoryTTF(data, static_cast<int>(size), g_cfg.font_size, &fc);
+    auto blob = ui_files::resource(L"YAP_FONT");
+    if (blob.empty() || !Rml::LoadFontFace(blob, "Yap", Rml::Style::FontStyle::Normal, Rml::Style::FontWeight::Normal))
+        log::error("overlay: font resource missing, text will not render");
 }
 
-// --- ImGui content -----------------------------------------------------------
-void draw_hud(float dt_ms, ULONGLONG now) {
+// --- content -----------------------------------------------------------------
+void sync_hud(float dt_ms, ULONGLONG now) {
     static std::vector<ts::Event> events;
     events.clear();
+    // The updater's banner: 20 s after it first appears.
+    static ULONGLONG notice_seen = 0;
+    auto notice = update::notice();
+    if (!notice->empty() && !notice_seen) notice_seen = now;
+    const std::string banner = notice_seen && now - notice_seen <= 20000 ? *notice : std::string();
+
     if (g_cfg.demo) {
         hud::demo_tick(g_hud, g_cfg, now);
         std::vector<ts::Event> dropped;
         ts::drain_events(dropped);  // keep the real queue from piling up meanwhile
-        hud::draw(g_hud, g_cfg, hud::demo_snapshot(), dt_ms, now);
+        hud::sync(g_hud, g_cfg, hud::demo_snapshot(), dt_ms, now, banner);
         return;
     }
     ts::drain_events(events);
     hud::feed(g_hud, g_cfg, events, now);
-    hud::draw(g_hud, g_cfg, *ts::snapshot(), dt_ms, now);
-}
-
-void draw_notice() {
-    auto notice = update::notice();
-    if (notice->empty()) return;
-    static ULONGLONG first_seen = 0;
-    if (!first_seen) first_seen = GetTickCount64();
-    if (GetTickCount64() - first_seen > 20000) return;
-    ImGui::SetNextWindowPos({ImGui::GetIO().DisplaySize.x * 0.5f, 24.f}, ImGuiCond_Always, {0.5f, 0.f});
-    ImGui::SetNextWindowBgAlpha(0.85f);
-    ImGui::Begin("##yap_notice", nullptr,
-                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
-                     ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
-                     ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
-                     ImGuiWindowFlags_NoBringToFrontOnFocus);
-    ImGui::TextColored({1.f, 0.85f, 0.3f, 1.f}, "%s", notice->c_str());
-    ImGui::End();
-}
-
-void draw_menu() {
-    menu::Host host{g_cfg, g_ini, true, g_hud};
-    menu::draw(host);
-    if (!host.open && g_menu_open.load()) PostMessageW(g_hwnd, WM_YAP_TOGGLE, 0, 0);  // window's [x]
+    hud::sync(g_hud, g_cfg, *ts::snapshot(), dt_ms, now, banner);
 }
 
 // Keep our window aligned with the game and sized to its client area, and only
@@ -293,33 +270,71 @@ void track_game_window() {
             g_width = w;
             g_height = h;
             create_rtv();
+            g_renderer->SetViewport(static_cast<int>(w), static_cast<int>(h));
+            g_rml->SetDimensions({static_cast<int>(w), static_cast<int>(h)});
         }
     }
 }
 
 void render_frame() {
     if (!g_rtv) return;
-    if (g_menu_open.load()) {
-        ClipCursor(nullptr);
-        ImGui::GetIO().MouseDrawCursor = true;
-    } else {
-        ImGui::GetIO().MouseDrawCursor = false;
-    }
+    if (g_menu_open.load()) ClipCursor(nullptr);
     const ULONGLONG now = GetTickCount64();
     const float dt_ms = g_last_frame ? static_cast<float>(std::min<ULONGLONG>(now - g_last_frame, 250)) : 16.f;
     g_last_frame = now;
-    ImGui_ImplDX11_NewFrame();
-    ImGui_ImplWin32_NewFrame();
-    ImGui::NewFrame();
-    draw_hud(dt_ms, now);
-    draw_notice();
-    if (g_menu_open.load()) draw_menu();
-    ImGui::Render();
-    const float clear[4] = {0.f, 0.f, 0.f, 0.f};  // alpha 0 = game shows through
+
+    g_rml->SetDensityIndependentPixelRatio(g_cfg.scale);  // every RCSS size is in dp
+    sync_hud(dt_ms, now);
+    if (g_menu_open.load()) {
+        menu::sync(*g_menu_host);
+        if (!g_menu_host->open) PostMessageW(g_hwnd, WM_YAP_TOGGLE, 0, 0);  // window's [x]
+    }
+    g_rml->Update();
+
+    // Alpha 0 = game shows through; the backend composites its (transparent-cleared)
+    // layer onto this with premultiplied ONE/INV_SRC_ALPHA, so untouched pixels stay 0.
+    const float clear[4] = {0.f, 0.f, 0.f, 0.f};
     g_ctx->OMSetRenderTargets(1, &g_rtv, nullptr);
     g_ctx->ClearRenderTargetView(g_rtv, clear);
-    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+    g_renderer->BeginFrame();
+    g_rml->Render();
+    g_renderer->EndFrame(g_rtv);
     g_swapchain->Present(0, 0);  // no vsync: never contend with the game's swapchain
+}
+
+bool init_rml(UINT w, UINT h) {
+    g_system.emplace();
+    g_system->SetWindow(g_hwnd);
+    g_renderer.emplace(g_device);
+    g_renderer->SetViewport(static_cast<int>(w), static_cast<int>(h));
+    Rml::SetSystemInterface(&*g_system);
+    Rml::SetRenderInterface(&*g_renderer);
+    Rml::SetFileInterface(&ui_files::instance());
+    if (!Rml::Initialise()) {
+        log::error("overlay: Rml::Initialise failed");
+        return false;
+    }
+    Rml::SetTextInputHandler(&g_ime);
+    colorpicker::register_element();
+    load_font();
+    g_rml = Rml::CreateContext("yap", {static_cast<int>(w), static_cast<int>(h)});
+    if (!g_rml) {
+        log::error("overlay: Rml::CreateContext failed");
+        return false;
+    }
+    g_rml->SetDensityIndependentPixelRatio(g_cfg.scale);
+    if (!hud::init(*g_rml)) return false;
+    g_menu_host.emplace(menu::Host{g_cfg, g_ini, false, g_hud});
+    return menu::init(*g_menu_host, *g_rml);
+}
+
+void shutdown_rml() {
+    if (Rml::GetTextInputHandler() == &g_ime) Rml::SetTextInputHandler(nullptr);
+    Rml::Shutdown();
+    g_rml = nullptr;
+    g_menu_host.reset();
+    g_renderer.reset();
+    g_system.reset();
 }
 
 DWORD WINAPI ui_thread(LPVOID) {
@@ -358,26 +373,8 @@ DWORD WINAPI ui_thread(LPVOID) {
     DwmExtendFrameIntoClientArea(g_hwnd, &glass);
     ShowWindow(g_hwnd, SW_SHOWNOACTIVATE);
 
-    if (!create_device(g_hwnd, w, h)) {
-        destroy_device();
-        DestroyWindow(g_hwnd);
-        g_hwnd = nullptr;
-        UnregisterClassW(wc.lpszClassName, wc.hInstance);
-        return 0;
-    }
-
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO();
-    io.IniFilename = nullptr;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-    io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
-    ImGui::StyleColorsDark();
-    SetDarkPastelImGuiStyle();
-    load_font();
-    if (!ImGui_ImplWin32_Init(g_hwnd) || !ImGui_ImplDX11_Init(g_device, g_ctx)) {
-        log::error("overlay: ImGui backend init failed");
-        ImGui::DestroyContext();
+    if (!create_device(g_hwnd, w, h) || !init_rml(w, h)) {
+        shutdown_rml();
         destroy_device();
         DestroyWindow(g_hwnd);
         g_hwnd = nullptr;
@@ -386,7 +383,7 @@ DWORD WINAPI ui_thread(LPVOID) {
     }
 
     g_ready = true;
-    log::info("overlay: ready (own {}x{} window, no game hooks)", w, h);
+    log::info("overlay: ready (own {}x{} window, RmlUi {}, no game hooks)", w, h, Rml::GetVersion());
 
     MSG msg{};
     while (!g_stop.load()) {
@@ -399,9 +396,7 @@ DWORD WINAPI ui_thread(LPVOID) {
         Sleep(16);  // ~60fps; ponytail: could idle when nothing is talking + menu closed
     }
 
-    ImGui_ImplDX11_Shutdown();
-    ImGui_ImplWin32_Shutdown();
-    ImGui::DestroyContext();
+    shutdown_rml();
     destroy_device();
     DestroyWindow(g_hwnd);
     g_hwnd = nullptr;

@@ -1,19 +1,14 @@
 #pragma once
-// SPDX-License-Identifier: MIT
-// Vector icon painter, ported from TeamSpeak3-Reshade-overlay (assets/LICENSE-tsro.txt).
-// Every indicator is ImDrawList primitives: no textures, scales to any size.
-#include "config.h"
+// Indicator icons are white SVGs in assets/ui/icons (embedded as resources, see
+// YapNotifier.rc) that the RCSS tints with image-color, so they scale to any size.
+#include <string>
 
-struct ImDrawList;
+#include "config.h"
 
 namespace yap::icons {
 
-// Draws `shape` centred on (cx, cy) inside a `size` px box. IconShape::None draws nothing.
-void draw(ImDrawList* dl, IconShape shape, float cx, float cy, float size, Color color, float thickness = 1.5f);
-
-// Rounded rectangle with optional border (alpha 0 = skipped).
-void panel(ImDrawList* dl, float x, float y, float w, float h, float rounding, Color fill, Color border,
-           float border_thickness);
+// Resource path for `shape` ("icons/microphone.svg"); "" for IconShape::None.
+std::string svg(IconShape shape);
 
 Color with_alpha(Color c, float scale);
 

@@ -1,5 +1,5 @@
 #pragma once
-// Roster filtering, ordering and per-user styling. Pure logic (no ImGui) so the
+// Roster filtering, ordering and per-user styling. Pure logic (no UI library) so the
 // host-side test can pin the state priority rules.
 #include <map>
 #include <string>

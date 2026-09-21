@@ -13,7 +13,7 @@ namespace yap::overlay {
 // Call before start().
 void set_config(const Config& cfg, std::wstring ini_path);
 
-// Spawns the UI thread (window + device + ImGui + message loop). Never throws;
+// Spawns the UI thread (window + device + RmlUi + message loop). Never throws;
 // on failure it logs and the overlay stays dormant.
 void start();
 

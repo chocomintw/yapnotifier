@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include <cstdint>
 #include <map>
 #include <string>
@@ -108,7 +109,7 @@ struct Config {
     bool show_friend_tag = true;
     Color friend_tag_color = rgba(136, 200, 255);
 
-    Indicator ind[IndCount];
+    std::array<Indicator, IndCount> ind;  // std::array so the menu can bind it as a data array
 
     // animation
     int speaking_attack_ms = 90, speaking_release_ms = 260;
@@ -129,7 +130,7 @@ struct Config {
     int notif_suppress_after_connect_ms = 2500;
     Color notif_background = rgba(10, 12, 16, 235);
     bool notif_accent_bar = true;
-    NotifCategory notif[NotifCount];
+    std::array<NotifCategory, NotifCount> notif;
 
     // chat feed
     bool chat_enabled = false;
