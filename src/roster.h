@@ -47,4 +47,9 @@ Resolved resolve(const ts::User& u, const Config& cfg, float level);
 
 Color lerp(Color a, Color b, float t);
 
+// Keeps a block of `size` inside a viewport of `extent` (any one unit): edge anchors push
+// in from that edge, so the offset is limited to [0, extent - size]; centred anchors move
+// off the middle, so it is limited to +-(extent - size) / 2.
+float clamp_offset(float offset, float size, float extent, bool centred);
+
 }  // namespace yap::roster

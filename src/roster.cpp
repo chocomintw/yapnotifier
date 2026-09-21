@@ -8,6 +8,11 @@
 namespace yap::roster {
 namespace proto = yap::proto;
 
+float clamp_offset(float offset, float size, float extent, bool centred) {
+    const float room = std::max(extent - size, 0.f);
+    return centred ? std::clamp(offset, -room / 2.f, room / 2.f) : std::clamp(offset, 0.f, room);
+}
+
 Color lerp(Color a, Color b, float t) {
     t = t < 0.f ? 0.f : t > 1.f ? 1.f : t;
     Color out = 0;

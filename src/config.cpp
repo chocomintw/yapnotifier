@@ -17,7 +17,7 @@ const char* const kIndNames[IndCount] = {"speaking",  "whispering",       "mic_m
                                          "priority_speaker", "suppressed", "locally_muted"};
 const char* const kNotifNames[NotifCount] = {"join", "leave", "switch", "connection",
                                              "whisper", "chat", "private_chat", "poke"};
-const char* const kNotifPrefixes[NotifCount] = {"[+]", "[-]", "[>]", "[*]", "[w]", "[#]", "[PM]", "[POKE]"};
+const char* const kNotifPrefixes[NotifCount] = {"Join", "Leave", "Switch", "Server", "Whisper", "Chat", "PM", "Poke"};
 
 namespace {
 constexpr wchar_t kSection[] = L"YapNotifier";
@@ -26,6 +26,10 @@ constexpr wchar_t kMissing[] = L"\x7f";  // sentinel default: key absent
 constexpr Color kGreen = rgba(126, 231, 135), kOrange = rgba(255, 149, 43), kRed = rgba(240, 104, 104),
                 kPurple = rgba(193, 122, 255), kAmber = rgba(224, 184, 92), kRecRed = rgba(255, 85, 85),
                 kBlue = rgba(88, 166, 255), kCyan = rgba(86, 214, 214), kGrey = rgba(120, 126, 136);
+// DESIGN.md tokens used by the notification defaults.
+constexpr Color kMint = rgba(159, 201, 162), kPeach = rgba(223, 168, 143), kPastelBlue = rgba(159, 187, 224),
+                kLavender = rgba(192, 168, 221), kGold = rgba(192, 133, 50), kSurfaceStrong = rgba(230, 229, 224),
+                kSemanticError = rgba(207, 45, 86);
 
 std::wstring widen(std::string_view s) {
     if (s.empty()) return {};
@@ -125,7 +129,7 @@ void visit(Config& c, const F& f) {
     f(L"port", c.port);
     f(L"auto_update", c.auto_update);
     f(L"menu_key", c.menu_key);
-    f(L"menu_dark", c.menu_dark);
+    f(L"dark_theme", c.dark_theme);
 
     f(L"show_when_disconnected", c.show_when_disconnected);
     f(L"master_opacity", c.master_opacity);
@@ -320,14 +324,15 @@ Config::Config() {
     auto n = [this](Notif i, bool enabled, const char* fmt, Color col, int hold) {
         notif[i] = {enabled, fmt, col, hold};
     };
-    n(NotifJoin, true, "{name} joined from {from}", kGreen, 4000);
-    n(NotifLeave, true, "{name} left to {to}", kRed, 4000);
-    n(NotifSwitch, true, "{previous} -> {channel} ({count})", kBlue, 3000);
-    n(NotifConnection, true, "TeamSpeak: {status}", kAmber, 4000);
-    n(NotifWhisper, true, "{name} is whispering from {channel}", kCyan, 2500);
-    n(NotifChat, false, "{name}: {message}", kBlue, 5000);
-    n(NotifPrivateChat, false, "{name}: {message}", rgba(197, 154, 255), 8000);
-    n(NotifPoke, true, "{name}: {message}", rgba(255, 197, 132), 10000);
+    // DESIGN.md timeline pastels: the one place the doc reserves them for (event stages)
+    n(NotifJoin, true, "{name} joined from {from}", kMint, 4000);
+    n(NotifLeave, true, "{name} left to {to}", kPeach, 4000);
+    n(NotifSwitch, true, "{previous} -> {channel} ({count})", kPastelBlue, 3000);
+    n(NotifConnection, true, "TeamSpeak: {status}", kGold, 4000);
+    n(NotifWhisper, true, "{name} is whispering from {channel}", kLavender, 2500);
+    n(NotifChat, false, "{name}: {message}", kSurfaceStrong, 5000);
+    n(NotifPrivateChat, false, "{name}: {message}", kLavender, 8000);
+    n(NotifPoke, true, "{name}: {message}", kSemanticError, 10000);
 }
 
 namespace config {

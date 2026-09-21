@@ -69,7 +69,7 @@ struct Config {
     int port = 25640;  // UDP port the TS3 plugin sends to (yap::proto::kPort)
     bool auto_update = true;
     int menu_key = 0x2D;  // VK_INSERT
-    bool menu_dark = false;  // menu colour scheme; the light one follows DESIGN.md
+    bool dark_theme = false;  // menu + toasts palette; light follows DESIGN.md, dark is its ink inversion
     bool demo = false;    // not saved
 
     // general look
@@ -129,8 +129,8 @@ struct Config {
     int notif_in_ms = 200, notif_out_ms = 350;
     bool notif_merge_duplicates = true;
     int notif_suppress_after_connect_ms = 2500;
-    Color notif_background = rgba(10, 12, 16, 235);
-    bool notif_accent_bar = true;
+    Color notif_background = 0;  // 0 = the theme's card colour
+    bool notif_accent_bar = false;
     std::array<NotifCategory, NotifCount> notif;
 
     // chat feed

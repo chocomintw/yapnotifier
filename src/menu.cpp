@@ -194,7 +194,7 @@ bool init(Host& h, Rml::Context& ctx) {
 
     // --- Config fields: menu.rml binds them by their ini names ----------------------------
 #define B(field) m.Bind(#field, &c.field)
-    B(port); B(auto_update); B(demo); B(menu_dark);
+    B(port); B(auto_update); B(demo); B(dark_theme);
     B(show_when_disconnected); B(master_opacity); B(scale); B(font_file); B(font_size);
     B(text_shadow); B(text_outline); B(text_color); B(text_secondary);
     B(anchor); B(pos_x); B(pos_y); B(show_title); B(show_parent); B(show_count); B(show_server);
@@ -297,7 +297,7 @@ void show(bool open) {
 void sync(Host& h) {
     refresh(h);
     g_model.DirtyAllVariables();
-    if (g_doc) g_doc->SetClass("dark", h.cfg.menu_dark);  // theme.rcss switches palettes on body.dark
+    if (g_doc) g_doc->SetClass("dark", h.cfg.dark_theme);  // theme.rcss switches palettes on body.dark
 }
 
 }  // namespace yap::menu

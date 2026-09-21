@@ -194,6 +194,14 @@ int main() {
         c.users["u7"] = yap::UserOverride{yap::rgba(1, 2, 3), 0, yap::IconShape::Star, yap::rgba(9, 9, 9), "Ren", 1, "tag"};
         res = yap::roster::resolve({7, 0, "u7", "", "orig"}, c, 0.f);
         CHECK(res.name == "Ren" && res.name_color == yap::rgba(1, 2, 3) && res.tag == "tag");
+
+        // offsets never push a block off-screen: edge anchors 0..extent-size, centred +-half
+        CHECK(yap::roster::clamp_offset(4000.f, 200.f, 1920.f, false) == 1720.f);
+        CHECK(yap::roster::clamp_offset(-5.f, 200.f, 1920.f, false) == 0.f);
+        CHECK(yap::roster::clamp_offset(100.f, 200.f, 1920.f, false) == 100.f);
+        CHECK(yap::roster::clamp_offset(4000.f, 200.f, 1920.f, true) == 860.f);
+        CHECK(yap::roster::clamp_offset(-4000.f, 200.f, 1920.f, true) == -860.f);
+        CHECK(yap::roster::clamp_offset(50.f, 3000.f, 1920.f, false) == 0.f);  // bigger than the screen: pin
         CHECK(res.leading.size() == 1 && res.leading[0].shape == yap::IconShape::Star);
         res = yap::roster::resolve({8, proto::Friend, "u8", "Pal", "orig"}, c, 0.f);
         CHECK(res.tag == "Pal" && res.name_color == c.friend_color);

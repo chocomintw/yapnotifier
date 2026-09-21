@@ -23,11 +23,11 @@
 		<div class="row legacy" data-if="legacy" data-style-margin-top="row_gap">TS3 plugin outdated: install YapNotifier.ts3_plugin</div>
 	</div>
 
-	<div id="toasts" class="block" data-style-width="notif_width" data-class-accent="accent_bar">
+	<div id="toasts" class="block" data-style-width="notif_width" data-class-accent="accent_bar" data-style-color="notif_text">
 		<div class="toast" data-for="t : toasts" data-style-opacity="t.opacity" data-style-background-color="notif_bg"
-		     data-style-border-color="t.border">
+		     data-style-border-color="notif_border">
 			<div class="bar" data-style-background-color="t.color"/>
-			<span class="prefix" data-style-color="t.color">{{t.prefix}}</span> {{t.text}}
+			<span class="pill" data-style-background-color="t.color" data-style-color="t.pill_text">{{t.prefix}}</span>{{t.text}}
 		</div>
 	</div>
 

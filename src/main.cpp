@@ -34,13 +34,15 @@ DWORD WINAPI init_thread(LPVOID) {
     yap::ts::start();
     yap::update::check_and_install(self, cfg.auto_update);
 
-    // Poll the menu hotkey. GetAsyncKeyState reads global state, so this works whether
-    // or not our window has focus. There is deliberately no eject: the plugin lives
-    // for the whole process.
+    // Poll the menu hotkey. GetAsyncKeyState reads global state, so only act on it while
+    // this process (the game or our own overlay window) is in the foreground. There is
+    // deliberately no eject: the plugin lives for the whole process.
     bool menu_was_down = false;
     for (;;) {
         bool menu_down = (GetAsyncKeyState(cfg.menu_key) & 0x8000) != 0;
-        if (menu_down && !menu_was_down) yap::overlay::toggle_menu();
+        DWORD fg_pid = 0;
+        GetWindowThreadProcessId(GetForegroundWindow(), &fg_pid);
+        if (menu_down && !menu_was_down && fg_pid == GetCurrentProcessId()) yap::overlay::toggle_menu();
         menu_was_down = menu_down;
 
         Sleep(30);

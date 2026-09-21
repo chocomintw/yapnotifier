@@ -27,7 +27,7 @@ struct RowView {
     std::vector<IconView> leading, trailing;
 };
 struct ToastView {
-    std::string prefix, text, color, border;
+    std::string prefix, text, color, pill_text;  // pill = category colour with ink/white text
     float opacity = 1.f;
 };
 struct ChatView {
@@ -44,9 +44,9 @@ struct View {
     std::string panel_color = "transparent", radius = "0dp", title, title_color = "#FFFFFFFF", title_icon;
     std::string title_icon_color = "#FFFFFFFF", more;
     std::vector<RowView> rows;
-    // toasts
-    bool accent_bar = true;
-    std::string notif_width = "280dp", notif_bg = "#00000000";
+    // toasts (DESIGN.md card: theme surface + hairline + ink, category as a pastel pill)
+    bool accent_bar = false;
+    std::string notif_width = "280dp", notif_bg = "#FFFFFFFF", notif_border = "#E6E5E0FF", notif_text = "#26251EFF";
     std::vector<ToastView> toasts;
     // chat
     std::string chat_width = "420dp", chat_bg = "#00000000", chat_sender_color = "#FFFFFFFF";
@@ -72,6 +72,15 @@ void set_prop(Rml::Element* el, const char* name, const std::string& value) {
 // and are pulled back by half their own size (same placement as the pre-RmlUi HUD).
 void place(Rml::Element* el, Anchor a, float x, float y) {
     const int col = static_cast<int>(a) % 3, row = static_cast<int>(a) / 3;
+    // Never off-screen: clamp the offset against the block's last laid-out size and the
+    // context (= game client area), all in dp.
+    if (Rml::Context* ctx = el->GetContext()) {
+        const float ratio = ctx->GetDensityIndependentPixelRatio();
+        const Rml::Vector2f size = el->GetBox().GetSize(Rml::BoxArea::Border) / ratio;
+        const Rml::Vector2f extent = Rml::Vector2f(ctx->GetDimensions()) / ratio;
+        x = roster::clamp_offset(x, size.x, extent.x, col == 1);
+        y = roster::clamp_offset(y, size.y, extent.y, row == 1);
+    }
     set_prop(el, "left", col == 0 ? dp(x) : col == 1 ? "50%" : "auto");
     set_prop(el, "right", col == 2 ? dp(x) : "auto");
     set_prop(el, "top", row == 0 ? dp(y) : row == 1 ? "50%" : "auto");
@@ -159,7 +168,20 @@ void sync_roster(View& v, State& st, const Config& cfg, const ts::Snapshot& snap
 }
 
 // --- toasts ---------------------------------------------------------------------------
+// Perceived luminance 0..1, for picking ink or white text over a colour.
+float luminance(Color c) {
+    return (0.299f * (c & 0xff) + 0.587f * ((c >> 8) & 0xff) + 0.114f * ((c >> 16) & 0xff)) / 255.f;
+}
+
 void sync_toasts(View& v, State& st, const Config& cfg, float master) {
+    // DESIGN.md tokens: light = card / hairline / ink, dark = its ink inversion. The theme
+    // picks the card; a custom notif_background wins, and text/hairline then follow whatever
+    // the card actually is (a user's black stays readable in the light theme).
+    const Color bg = cfg.notif_background ? cfg.notif_background : cfg.dark_theme ? rgba(0x26, 0x25, 0x1e) : rgba(0xff, 0xff, 0xff);
+    const bool dark = luminance(bg) < 0.5f;
+    v.notif_bg = hex(bg);
+    v.notif_border = hex(dark ? rgba(0x3a, 0x38, 0x30) : rgba(0xe6, 0xe5, 0xe0));
+    v.notif_text = hex(dark ? rgba(0xf7, 0xf7, 0xf4) : rgba(0x26, 0x25, 0x1e));
     v.toasts.clear();
     if (!cfg.notif_enabled) return;
     for (const auto& t : st.toasts.items()) {
@@ -168,7 +190,8 @@ void sync_toasts(View& v, State& st, const Config& cfg, float master) {
         b.prefix = kNotifPrefixes[t.cat];
         b.text = t.text + (t.count > 1 ? " x" + std::to_string(t.count) : "");
         b.color = hex(col);
-        b.border = hex(col, 0.55f);
+        // ink on the pastels, white on the dark ones (gold, error)
+        b.pill_text = hex(luminance(col) > 0.55f ? rgba(0x26, 0x25, 0x1e) : rgba(0xff, 0xff, 0xff));
         b.opacity = notify::Queue::alpha(t, cfg) * master;
         v.toasts.push_back(std::move(b));
     }
@@ -245,7 +268,7 @@ bool init(Rml::Context& ctx) {
         h.RegisterMember("prefix", &ToastView::prefix);
         h.RegisterMember("text", &ToastView::text);
         h.RegisterMember("color", &ToastView::color);
-        h.RegisterMember("border", &ToastView::border);
+        h.RegisterMember("pill_text", &ToastView::pill_text);
         h.RegisterMember("opacity", &ToastView::opacity);
     }
     m.RegisterArray<std::vector<ToastView>>();
@@ -279,6 +302,8 @@ bool init(Rml::Context& ctx) {
     m.Bind("accent_bar", &v.accent_bar);
     m.Bind("notif_width", &v.notif_width);
     m.Bind("notif_bg", &v.notif_bg);
+    m.Bind("notif_border", &v.notif_border);
+    m.Bind("notif_text", &v.notif_text);
     m.Bind("toasts", &v.toasts);
     m.Bind("chat_width", &v.chat_width);
     m.Bind("chat_bg", &v.chat_bg);
@@ -320,7 +345,6 @@ void sync(State& st, const Config& cfg, const ts::Snapshot& snap, float dt_ms, u
     v.radius = dp(cfg.corner_radius);
     v.accent_bar = cfg.notif_accent_bar;
     v.notif_width = dp(cfg.notif_width);
-    v.notif_bg = hex(cfg.notif_background);
     v.chat_width = dp(cfg.chat_width);
     v.chat_bg = hex(cfg.chat_background, master);
     v.chat_sender_color = hex(cfg.chat_sender_color);

@@ -4,7 +4,7 @@
 	<link type="text/rcss" href="theme.rcss"/>
 </head>
 <body id="menu" data-model="cfg">
-<handle move_target="#menu"><div class="titlebar">{{version}}<button class="close ghost" data-event-click="close()">x</button></div></handle>
+<handle move_target="menu"><div class="titlebar">{{version}}<button class="close ghost" data-event-click="close()">x</button></div></handle>
 <tabset id="tabs">
 
 <tab>Status</tab>
@@ -20,7 +20,7 @@
 	<div class="row"><input type="checkbox" data-checked="demo"/> Demo mode (fake roster + events, no TeamSpeak needed)</div>
 	<div class="row"><span class="label">UDP port</span><input type="text" class="num" data-value="port"/></div>
 	<div class="row"><input type="checkbox" data-checked="auto_update"/> Auto-update on launch</div>
-	<div class="row"><input type="checkbox" data-checked="menu_dark"/> Dark menu theme</div>
+	<div class="row"><input type="checkbox" data-checked="dark_theme"/> Dark theme (menu + notifications)</div>
 	<p class="dim">{{key_name}} toggles this menu (menu_key in the ini)</p>
 </panel>
 
@@ -107,7 +107,7 @@
 	<div class="row"><span class="label">Fade in (ms)</span><input type="range" min="0" max="2000" step="10" data-value="notif_in_ms"/><span class="val">{{notif_in_ms}}</span></div>
 	<div class="row"><span class="label">Fade out (ms)</span><input type="range" min="0" max="2000" step="10" data-value="notif_out_ms"/><span class="val">{{notif_out_ms}}</span></div>
 	<div class="row"><span class="label">Quiet after connect (ms)</span><input type="range" min="0" max="20000" step="100" data-value="notif_suppress_after_connect_ms"/><span class="val">{{notif_suppress_after_connect_ms}}</span></div>
-	<div class="row"><span class="label">Background</span><colorpicker data-value="notif_background"/></div>
+	<div class="row"><span class="label">Background</span><colorpicker optional data-value="notif_background"/></div>
 	<h2>Categories</h2>
 	<div class="ind" data-for="n : notif">
 		<div class="row"><input type="checkbox" data-checked="n.enabled"/> <b>{{notif_names[it_index]}}</b><colorpicker data-value="n.color"/></div>

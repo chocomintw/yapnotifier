@@ -35,7 +35,6 @@ using namespace yap;
 // hit-tested the never-painted GDI bitmap, so every click fell through; and
 // WS_EX_TRANSPARENT only passes input through when the window is also WS_EX_LAYERED.)
 constexpr UINT WM_YAP_TOGGLE = WM_APP + 1;
-constexpr wchar_t kGameWindowClass[] = L"grcWindow";
 
 Config g_cfg;
 std::wstring g_ini;
@@ -114,14 +113,44 @@ bool create_rtv() {
     return SUCCEEDED(hr) && g_rtv;
 }
 
-bool create_device(HWND hwnd, UINT w, UINT h) {
+// A DLL from System32 by absolute path. ReShade installs itself as a proxy dxgi.dll and ENB
+// as a proxy d3d11.dll, already loaded under those names by the time we run, so the plain
+// imports would route our device through them; our window has nothing to do with the game's
+// rendering, so ask Windows for the real implementations (borrowed from tsro).
+HMODULE system_library(const wchar_t* name) {
+    wchar_t dir[MAX_PATH] = {};
+    const UINT n = GetSystemDirectoryW(dir, MAX_PATH);
+    if (n == 0 || n >= MAX_PATH) return nullptr;
+    return LoadLibraryW((std::wstring(dir, n) + L"\\" + name).c_str());
+}
+
+using CreateFactory2Fn = HRESULT(WINAPI*)(UINT, REFIID, void**);
+using D3D11CreateDeviceFn = HRESULT(WINAPI*)(IDXGIAdapter*, D3D_DRIVER_TYPE, HMODULE, UINT, const D3D_FEATURE_LEVEL*,
+                                             UINT, UINT, ID3D11Device**, D3D_FEATURE_LEVEL*, ID3D11DeviceContext**);
+
+bool create_device_unguarded(HWND hwnd, UINT w, UINT h) {
+    const HMODULE real_d3d11 = system_library(L"d3d11.dll"), real_dxgi = system_library(L"dxgi.dll");
+    const auto create_d3d11 =
+        real_d3d11 ? reinterpret_cast<D3D11CreateDeviceFn>(GetProcAddress(real_d3d11, "D3D11CreateDevice")) : nullptr;
+    const auto create_factory =
+        real_dxgi ? reinterpret_cast<CreateFactory2Fn>(GetProcAddress(real_dxgi, "CreateDXGIFactory2")) : nullptr;
+    if (!create_d3d11 || !create_factory) {
+        log::error("overlay: the system d3d11.dll/dxgi.dll could not be loaded");
+        return false;
+    }
     D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_0};
-    HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-                                   levels, 2, D3D11_SDK_VERSION, &g_device, nullptr, &g_ctx);
+    HRESULT hr = create_d3d11(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, levels, 2,
+                              D3D11_SDK_VERSION, &g_device, nullptr, &g_ctx);
     IDXGIDevice* dxgi = nullptr;
     IDXGIFactory2* factory = nullptr;
+    IDXGIAdapter* adapter = nullptr;
     if (SUCCEEDED(hr)) hr = g_device->QueryInterface(IID_PPV_ARGS(&dxgi));
-    if (SUCCEEDED(hr)) hr = CreateDXGIFactory2(0, IID_PPV_ARGS(&factory));
+    // The factory this device was made on: one consistent object graph. An independent
+    // CreateDXGIFactory2 is what faulted inside ReShade's dxgi for tsro.
+    if (SUCCEEDED(hr)) hr = dxgi->GetAdapter(&adapter);
+    if (SUCCEEDED(hr)) hr = adapter->GetParent(IID_PPV_ARGS(&factory));
+    release(adapter);
+    if (FAILED(hr)) hr = create_factory(0, IID_PPV_ARGS(&factory));
     if (SUCCEEDED(hr)) {
         DXGI_SWAP_CHAIN_DESC1 sd{};
         sd.Width = w;
@@ -151,6 +180,17 @@ bool create_device(HWND hwnd, UINT w, UINT h) {
     return create_rtv();
 }
 
+// Other people's graphics DLLs live in this process too and a fault in theirs kills the game
+// just the same; an overlay is not worth that, so a fault here just switches us off.
+bool create_device(HWND hwnd, UINT w, UINT h) {
+    __try {
+        return create_device_unguarded(hwnd, w, h);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        log::error("overlay: graphics setup faulted; overlay disabled for this session, game unaffected");
+        return false;
+    }
+}
+
 void destroy_device() {
     release(g_rtv);
     release(g_dcomp_visual);
@@ -162,9 +202,40 @@ void destroy_device() {
 }
 
 // --- window ------------------------------------------------------------------
+// The game's window: the largest visible top-level window of *this process*. Not a class
+// lookup (FindWindowW("grcWindow") is process-wide: on a restart it found the previous
+// instance's dying/minimised window and we followed that off-screen).
+struct GameWindowSearch {
+    DWORD pid = 0;
+    HWND best = nullptr;
+    long best_area = 0;
+};
+
+BOOL CALLBACK pick_game_window(HWND hwnd, LPARAM param) {
+    auto* s = reinterpret_cast<GameWindowSearch*>(param);
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid != s->pid || hwnd == g_hwnd || !IsWindowVisible(hwnd)) return TRUE;
+    RECT c{};
+    if (!GetClientRect(hwnd, &c)) return TRUE;
+    const long area = (c.right - c.left) * (c.bottom - c.top);
+    if (area > s->best_area) {
+        s->best_area = area;
+        s->best = hwnd;
+    }
+    return TRUE;
+}
+
+HWND game_window() {
+    GameWindowSearch s;
+    s.pid = GetCurrentProcessId();
+    EnumWindows(pick_game_window, reinterpret_cast<LPARAM>(&s));
+    return s.best;
+}
+
 // Screen rect of the game's client area, so our window covers exactly it.
 bool game_client_rect(RECT& out) {
-    HWND game = FindWindowW(kGameWindowClass, nullptr);
+    HWND game = game_window();
     if (!game) return false;
     RECT c{};
     if (!GetClientRect(game, &c) || c.right <= c.left || c.bottom <= c.top) return false;
@@ -196,7 +267,7 @@ LRESULT CALLBACK wndproc(HWND h, UINT m, WPARAM w, LPARAM l) {
                 suspend_game_mouse();
             } else {
                 restore_game_mouse();
-                if (HWND game = FindWindowW(kGameWindowClass, nullptr)) SetForegroundWindow(game);
+                if (HWND game = game_window()) SetForegroundWindow(game);
             }
             return 0;
         }
@@ -252,9 +323,13 @@ void sync_hud(float dt_ms, ULONGLONG now) {
 // otherwise float over every other app when the player tabs out.
 void track_game_window() {
     static bool shown = true;
-    HWND game = FindWindowW(kGameWindowClass, nullptr);
-    HWND fg = GetForegroundWindow();
-    const bool visible = game && !IsIconic(game) && (fg == game || (fg == g_hwnd && g_menu_open.load()));
+    HWND game = game_window();
+    // "Foreground" = any window of this process: the game, our overlay, or whatever FiveM
+    // has up. Tying it to the menu state blinked the HUD on close, while the foreground
+    // handoff from our window back to the game was still in flight.
+    DWORD fg_pid = 0;
+    GetWindowThreadProcessId(GetForegroundWindow(), &fg_pid);
+    const bool visible = game && !IsIconic(game) && fg_pid == GetCurrentProcessId();
     if (visible != shown) {
         ShowWindow(g_hwnd, visible ? SW_SHOWNOACTIVATE : SW_HIDE);
         shown = visible;
@@ -351,8 +426,14 @@ DWORD WINAPI ui_thread(LPVOID) {
         return 0;
     }
 
+    // The game may not have a window yet: wait for one (up to 60 s) rather than sizing
+    // ourselves to the whole screen and drawing the HUD relative to the wrong rect.
     RECT r{};
-    if (!game_client_rect(r)) {
+    for (int i = 0; i < 600 && !g_stop.load(); ++i) {
+        if (game_client_rect(r)) break;
+        Sleep(100);
+    }
+    if (r.right <= r.left) {
         r = {0, 0, static_cast<LONG>(GetSystemMetrics(SM_CXSCREEN)),
              static_cast<LONG>(GetSystemMetrics(SM_CYSCREEN))};
     }

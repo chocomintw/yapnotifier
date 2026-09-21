@@ -1,5 +1,5 @@
 /* INSERT menu theme, following DESIGN.md: warm cream canvas, warm ink, hairline-only depth,
-   one orange CTA. `body.dark` (cfg.menu_dark) swaps the palette below; shapes, type and
+   one orange CTA. `body.dark` (cfg.dark_theme) swaps the palette below; shapes, type and
    spacing are shared. RmlUi ships no default stylesheet, so every widget part is styled here.
    Tokens: canvas #f7f7f4  canvas-soft #fafaf7  card #ffffff  surface-strong #e6e5e0
            hairline #e6e5e0 / soft #efeee8 / strong #cfcdc4
