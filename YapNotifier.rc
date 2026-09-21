@@ -23,9 +23,9 @@ FX_ASI_BUILD 3775 BEGIN "\0" END
 FX_ASI_BUILD 3788 BEGIN "\0" END
 FX_ASI_BUILD 3889 BEGIN "\0" END
 
-// UI font (OFL, licence in assets/OFL-Quicksand.txt), embedded so the single-file .asi
+// UI font (OFL, licence in assets/OFL-Inter.txt), embedded so the single-file .asi
 // the updater ships stays self-contained. Loaded in overlay.cpp via FindResource.
-YAP_FONT RCDATA "assets/Quicksand-Regular.ttf"
+YAP_FONT RCDATA "assets/InterVariable.ttf"
 
 // RmlUi documents, styles and icons (assets/ui), served by src/ui_files.cpp: resource name = "UI_" +
 // path upper-cased with every non-alphanumeric turned into "_". Add a line when a file is added.

@@ -125,6 +125,7 @@ void visit(Config& c, const F& f) {
     f(L"port", c.port);
     f(L"auto_update", c.auto_update);
     f(L"menu_key", c.menu_key);
+    f(L"menu_dark", c.menu_dark);
 
     f(L"show_when_disconnected", c.show_when_disconnected);
     f(L"master_opacity", c.master_opacity);

@@ -208,17 +208,20 @@ private:
         float r = 1.f, g = 1.f, b = 1.f;
         rgb_from_hsv(h_, s_, v_, r, g, b);
 
-        // header swatch (alpha over a checker), slashed when unset
+        // header swatch (alpha over a checker), slashed when unset. Chrome follows the RCSS
+        // `color` of the element so both menu themes can tint it.
+        const Rml::Colourb ink = GetProperty<Rml::Colourb>("color");
+        const float ir = ink.red / 255.f, ig = ink.green / 255.f, ib = ink.blue / 255.f;
         const float sw = std::min(size.x, 28.f);
         checker(m, 0, 0, sw, kHeader, 6.f);
         if (unset_) {
-            quad(m, 0, 0, sw, kHeader, pm(0.12f, 0.13f, 0.15f, 0.9f * opacity));
-            quad(m, 3, kHeader * 0.5f - 1.f, sw - 6.f, 2.f, pm(0.8f, 0.3f, 0.3f, opacity));
+            quad(m, 0, 0, sw, kHeader, pm(ir, ig, ib, 0.25f * opacity));
+            quad(m, 3, kHeader * 0.5f - 1.f, sw - 6.f, 2.f, pm(0.81f, 0.18f, 0.34f, opacity));  // semantic-error
         } else {
             quad(m, 0, 0, sw, kHeader, pm(r, g, b, a_ * opacity));
         }
-        quad(m, 0, 0, sw, 1.f, pm(0.8f, 0.8f, 0.9f, 0.5f * opacity));
-        quad(m, 0, kHeader - 1.f, sw, 1.f, pm(0.8f, 0.8f, 0.9f, 0.5f * opacity));
+        quad(m, 0, 0, sw, 1.f, pm(ir, ig, ib, 0.5f * opacity));
+        quad(m, 0, kHeader - 1.f, sw, 1.f, pm(ir, ig, ib, 0.5f * opacity));
 
         if (expanded_) {
             if (optional_) {  // the "x" box

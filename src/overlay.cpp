@@ -210,17 +210,18 @@ LRESULT CALLBACK wndproc(HWND h, UINT m, WPARAM w, LPARAM l) {
     return DefWindowProcW(h, m, w, l);
 }
 
-// `font_file` (relative to the plugins dir) if set, else Quicksand from the RCDATA
-// resource in YapNotifier.rc. Both register as family "Yap", which the RCSS uses.
+// `font_file` (relative to the plugins dir) if set, else Inter from the RCDATA resource in
+// YapNotifier.rc. Both register as family "Yap", which the RCSS uses; weight Auto loads every
+// named instance of a variable font (Inter: 100..900) so font-weight 500/600 resolve.
 void load_font() {
     if (!g_cfg.font_file.empty()) {
         std::filesystem::path p = g_cfg.font_file;
         if (p.is_relative()) p = std::filesystem::path(g_ini).parent_path() / p;
-        if (Rml::LoadFontFace(p.string(), "Yap", Rml::Style::FontStyle::Normal, Rml::Style::FontWeight::Normal)) return;
-        log::error("overlay: could not load font {}, using Quicksand", p.string());
+        if (Rml::LoadFontFace(p.string(), "Yap", Rml::Style::FontStyle::Normal, Rml::Style::FontWeight::Auto)) return;
+        log::error("overlay: could not load font {}, using Inter", p.string());
     }
     auto blob = ui_files::resource(L"YAP_FONT");
-    if (blob.empty() || !Rml::LoadFontFace(blob, "Yap", Rml::Style::FontStyle::Normal, Rml::Style::FontWeight::Normal))
+    if (blob.empty() || !Rml::LoadFontFace(blob, "Yap", Rml::Style::FontStyle::Normal, Rml::Style::FontWeight::Auto))
         log::error("overlay: font resource missing, text will not render");
 }
 

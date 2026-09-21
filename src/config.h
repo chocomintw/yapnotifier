@@ -69,13 +69,14 @@ struct Config {
     int port = 25640;  // UDP port the TS3 plugin sends to (yap::proto::kPort)
     bool auto_update = true;
     int menu_key = 0x2D;  // VK_INSERT
+    bool menu_dark = false;  // menu colour scheme; the light one follows DESIGN.md
     bool demo = false;    // not saved
 
     // general look
     bool show_when_disconnected = true;
     float master_opacity = 0.92f;
     float scale = 1.f;
-    std::string font_file;  // relative to the plugins dir; empty = embedded Quicksand
+    std::string font_file;  // relative to the plugins dir; empty = embedded Inter
     float font_size = 19.f;
     bool text_shadow = true;
     bool text_outline = false;

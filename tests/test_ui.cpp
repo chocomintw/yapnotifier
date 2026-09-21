@@ -51,7 +51,7 @@ int main() {
     Rml::SetSystemInterface(&system);
     Rml::SetFileInterface(&yap::ui_files::instance());  // no resources in an exe: falls through to disk
     CHECK(Rml::Initialise());
-    CHECK(Rml::LoadFontFace("../Quicksand-Regular.ttf", "Yap", Rml::Style::FontStyle::Normal, Rml::Style::FontWeight::Normal));
+    CHECK(Rml::LoadFontFace("../InterVariable.ttf", "Yap", Rml::Style::FontStyle::Normal, Rml::Style::FontWeight::Auto));
     yap::colorpicker::register_element();
     Rml::Context* ctx = Rml::CreateContext("test", {1920, 1080});
     CHECK(ctx);

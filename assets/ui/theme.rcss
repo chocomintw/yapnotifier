@@ -1,85 +1,108 @@
-/* Dark pastel theme for the INSERT menu (ported from the old ImGui style table).
-   RmlUi ships no default stylesheet, so every widget part is styled here. */
+/* INSERT menu theme, following DESIGN.md: warm cream canvas, warm ink, hairline-only depth,
+   one orange CTA. `body.dark` (cfg.menu_dark) swaps the palette below; shapes, type and
+   spacing are shared. RmlUi ships no default stylesheet, so every widget part is styled here.
+   Tokens: canvas #f7f7f4  canvas-soft #fafaf7  card #ffffff  surface-strong #e6e5e0
+           hairline #e6e5e0 / soft #efeee8 / strong #cfcdc4
+           ink #26251e  body #5a5852  muted #807d72  muted-soft #a09c92
+           primary #f54e00 / active #d04200  error #cf2d56 */
 body {
 	font-family: Yap;
-	font-size: 15dp;
-	color: #e6edf2;
+	font-size: 14dp;
+	color: #26251e;
 }
 div, p, h2, hr, tabset, tabs, panels, panel { display: block; }
-b { font-weight: bold; }
-p { margin: 4dp 0; }
+b { font-weight: 600; }
+p { margin: 4dp 0; color: #5a5852; }
 h2 {
-	margin: 12dp 0 4dp 0;
-	padding-bottom: 2dp;
-	font-size: 15dp;
-	color: #b3c1d9;
-	border-bottom: 1dp #59667a;
+	margin: 20dp 0 8dp 0;
+	font-size: 11dp;
+	font-weight: 600;
+	letter-spacing: 0.88dp;
+	text-transform: uppercase;
+	color: #807d72;
 }
-hr { height: 1dp; margin: 8dp 0; background-color: #59667ab3; }
-.dim { color: #99a6b3; }
-.warn { color: #ffd94d; }
+panel h2:first-child { margin-top: 0; }
+hr { height: 1dp; margin: 12dp 0; background-color: #e6e5e0; }
+.dim { color: #807d72; }
+.warn { color: #cf2d56; }
 
 /* window */
 #menu {
 	position: absolute;
 	left: 60dp;
 	top: 140dp;
-	width: 620dp;
-	background-color: #1f2126;
-	border-radius: 8dp;
+	width: 640dp;
+	background-color: #f7f7f4;
+	border: 1dp #cfcdc4;
+	border-radius: 12dp;
 	box-sizing: border-box;
 }
 handle { display: block; }
 .titlebar {
-	padding: 8dp 14dp;
-	background-color: #33404d;
-	border-radius: 8dp 8dp 0 0;
-	font-size: 16dp;
+	padding: 12dp 16dp;
+	font-size: 14dp;
+	font-weight: 500;
+	border-bottom: 1dp #e6e5e0;
 }
 .footer {
-	padding: 10dp 14dp;
-	border-top: 1dp #59667a66;
+	padding: 12dp 16dp;
+	border-top: 1dp #e6e5e0;
 }
 .footer .dim { margin-left: 8dp; font-size: 13dp; }
 
 /* tabs */
-tabs { padding: 6dp 10dp 0 10dp; background-color: #26292f; }
+tabs { padding: 0 12dp; border-bottom: 1dp #e6e5e0; }
 tab {
 	display: inline-block;
-	padding: 6dp 12dp;
-	margin-right: 2dp;
-	border-radius: 5dp 5dp 0 0;
-	background-color: #424d6bcc;
-	color: #cdd6e0;
+	padding: 10dp 12dp 8dp 12dp;
+	margin-right: 4dp;
+	font-weight: 500;
+	color: #807d72;
+	border-bottom: 2dp transparent;
+	cursor: pointer;
 }
-tab:hover { background-color: #5c6b94; color: #fff; }
-tab:selected { background-color: #6b80ad; color: #fff; }
+tab:hover { color: #26251e; }
+tab:selected { color: #26251e; border-bottom-color: #26251e; }
 panel {
-	padding: 12dp 16dp;
+	padding: 16dp 20dp 20dp 20dp;
 	max-height: 560dp;
 	overflow-y: auto;
 }
 
 /* rows */
-.row { margin: 5dp 0; }
-.label { display: inline-block; width: 190dp; }
-.val { margin-left: 8dp; color: #99a6b3; }
-.ind { margin: 6dp 0 10dp 0; padding: 6dp 8dp; background-color: #24272d; border-radius: 6dp; }
-.pick { padding: 3dp 8dp; margin: 1dp 0; border-radius: 4dp; cursor: pointer; }
-.pick:hover { background-color: #47577a99; }
-.pick.sel { background-color: #5c73a6d9; }
+.row { margin: 6dp 0; }
+.label { display: inline-block; width: 180dp; }
+.val { margin-left: 8dp; color: #807d72; }
+.ind {
+	margin: 8dp 0 12dp 0;
+	padding: 12dp 16dp;
+	background-color: #ffffff;
+	border: 1dp #e6e5e0;
+	border-radius: 12dp;
+}
+.pick { padding: 6dp 10dp; margin: 1dp 0; border-radius: 6dp; cursor: pointer; }
+.pick:hover { background-color: #efeee8; }
+.pick.sel { background-color: #e6e5e0; }
 
-/* buttons */
+/* buttons: secondary by default, .primary is the single orange CTA, .ghost is text-only */
 button {
 	display: inline-block;
-	padding: 5dp 10dp;
-	margin-right: 6dp;
-	border-radius: 5dp;
-	background-color: #47577ab3;
+	padding: 6dp 12dp;
+	margin-right: 8dp;
+	border-radius: 8dp;
+	background-color: #ffffff;
+	border: 1dp #cfcdc4;
+	color: #26251e;
+	font-weight: 500;
 	cursor: pointer;
 }
-button:hover { background-color: #5c73a6d9; }
-button:active { background-color: #6680b3; }
+button:hover { background-color: #efeee8; }
+button:active { background-color: #e6e5e0; }
+button.primary { background-color: #f54e00; border-color: #f54e00; color: #ffffff; }
+button.primary:hover { background-color: #f54e00; }
+button.primary:active { background-color: #d04200; border-color: #d04200; }
+button.ghost { background-color: transparent; border-color: transparent; color: #807d72; }
+button.ghost:hover { background-color: transparent; color: #26251e; }
 button.close { float: right; padding: 0 8dp; margin: 0; }
 
 /* checkbox */
@@ -90,12 +113,12 @@ input.checkbox {
 	margin-right: 4dp;
 	vertical-align: -3dp;
 	border-radius: 4dp;
-	background-color: #333847;
-	border: 1dp #59667a;
+	background-color: #ffffff;
+	border: 1dp #cfcdc4;
 	cursor: pointer;
 }
-input.checkbox:hover { background-color: #47526b; }
-input.checkbox:checked { background-color: #80a6e6; border-color: #b3c1d9; }
+input.checkbox:hover { border-color: #807d72; }
+input.checkbox:checked { background-color: #26251e; border-color: #26251e; }
 
 /* range slider */
 input.range {
@@ -106,68 +129,74 @@ input.range {
 	cursor: pointer;
 }
 input.range slidertrack {
-	margin-top: 6dp;
-	height: 6dp;
-	border-radius: 3dp;
-	background-color: #333847;
+	margin-top: 7dp;
+	height: 4dp;
+	border-radius: 2dp;
+	background-color: #e6e5e0;
 }
 input.range sliderbar {
-	margin-top: -2dp;
+	margin-top: -6dp;
 	width: 12dp;
 	height: 16dp;
 	border-radius: 4dp;
-	background-color: #80a6e6;
+	background-color: #26251e;
 }
-input.range sliderbar:hover, input.range sliderbar:active { background-color: #99bfff; }
+input.range sliderbar:hover, input.range sliderbar:active { background-color: #5a5852; }
 input.range sliderarrowdec, input.range sliderarrowinc { width: 0; height: 0; }
 
 /* select */
 select {
 	display: inline-block;
-	width: 190dp;
-	height: 22dp;
-	vertical-align: -6dp;
+	width: 180dp;
+	height: 24dp;
+	box-sizing: border-box;
+	vertical-align: -7dp;
 	margin-right: 8dp;
-	border-radius: 4dp;
-	background-color: #333847;
+	border-radius: 8dp;
+	background-color: #ffffff;
+	border: 1dp #cfcdc4;
 	cursor: pointer;
 }
-select selectvalue { width: auto; padding: 2dp 8dp; margin-right: 20dp; }
+select selectvalue { width: auto; padding: 3dp 8dp; margin-right: 20dp; }
 select selectarrow {
 	width: 20dp;
 	height: 22dp;
-	border-radius: 0 4dp 4dp 0;
-	background-color: #47577a;
+	border-radius: 0 7dp 7dp 0;
+	border-left: 1dp #e6e5e0;
+	background-color: #fafaf7;
 }
 select selectbox {
-	width: 190dp;
-	background-color: #1a1a1ff2;
-	border: 1dp #59667a;
-	border-radius: 0 0 4dp 4dp;
+	width: 180dp;
+	margin-top: 2dp;
+	background-color: #ffffff;
+	border: 1dp #cfcdc4;
+	border-radius: 8dp;
 }
-select selectbox option { padding: 3dp 8dp; }
-select selectbox option:hover { background-color: #47577a; }
-select selectbox option:checked { color: #fff; background-color: #5c73a6; }
+select selectbox option { padding: 5dp 10dp; }
+select selectbox option:hover { background-color: #efeee8; }
+select selectbox option:checked { background-color: #e6e5e0; }
 
 /* text input */
 input.text {
 	display: inline-block;
 	width: 300dp;
-	height: 22dp;
-	padding: 1dp 6dp;
-	border-radius: 4dp;
-	background-color: #333847;
-	color: #e6edf2;
-	caret-color: #e6edf2;
-	vertical-align: -6dp;
+	height: 24dp;
+	padding: 2dp 8dp;
+	box-sizing: border-box;
+	border-radius: 8dp;
+	background-color: #ffffff;
+	border: 1dp #cfcdc4;
+	color: #26251e;
+	caret-color: #26251e;
+	vertical-align: -7dp;
 	cursor: text;
 	white-space: nowrap;
 	overflow: hidden;
 }
-input.text:focus { background-color: #47526b; }
+input.text:focus { border-color: #26251e; }
 input.text.num { width: 80dp; }
 
-/* colour picker (geometry drawn by src/colorpicker.cpp; the hex text is a child span) */
+/* colour picker (geometry drawn by src/colorpicker.cpp, tinted with `color`; the hex text is a child span) */
 colorpicker {
 	display: inline-block;
 	width: 120dp;
@@ -177,7 +206,7 @@ colorpicker {
 	vertical-align: -4dp;
 	line-height: 18dp;
 	font-size: 12dp;
-	color: #99a6b3;
+	color: #807d72;
 	cursor: pointer;
 	drag: drag;
 }
@@ -185,7 +214,43 @@ colorpicker.expanded { width: 200dp; height: 146dp; }
 
 /* scrollbars (panels) */
 scrollbarvertical { width: 8dp; margin-left: 4dp; }
-scrollbarvertical slidertrack { background-color: #222529; }
-scrollbarvertical sliderbar { background-color: #4d5a6b; border-radius: 4dp; }
-scrollbarvertical sliderbar:hover { background-color: #5c6b80; }
+scrollbarvertical slidertrack { background-color: #f7f7f4; }
+scrollbarvertical sliderbar { background-color: #cfcdc4; border-radius: 4dp; }
+scrollbarvertical sliderbar:hover { background-color: #a09c92; }
 scrollbarvertical sliderarrowdec, scrollbarvertical sliderarrowinc { width: 0; height: 0; }
+
+/* ---- dark palette (DESIGN.md's ink-on-cream inversion) ----------------------------------
+   canvas #1c1b17  card #26251e  hairline #3a3830 / soft #2f2e27 / strong #4c4a41
+   ink #f7f7f4  body #b9b6ac  muted #807d72 (shared)  muted-soft #5a5852 */
+#menu.dark { background-color: #1c1b17; border-color: #4c4a41; color: #f7f7f4; }
+.dark p { color: #b9b6ac; }
+.dark hr { background-color: #3a3830; }
+.dark .titlebar, .dark .footer, .dark tabs { border-color: #3a3830; }
+.dark tab:hover, .dark tab:selected { color: #f7f7f4; }
+.dark tab:selected { border-bottom-color: #f7f7f4; }
+.dark .ind { background-color: #26251e; border-color: #3a3830; }
+.dark .pick:hover { background-color: #2f2e27; }
+.dark .pick.sel { background-color: #3a3830; }
+.dark button { background-color: #26251e; border-color: #4c4a41; color: #f7f7f4; }
+.dark button:hover { background-color: #2f2e27; }
+.dark button:active { background-color: #3a3830; }
+.dark button.primary { background-color: #f54e00; border-color: #f54e00; color: #ffffff; }
+.dark button.primary:active { background-color: #d04200; border-color: #d04200; }
+.dark button.ghost { background-color: transparent; border-color: transparent; color: #807d72; }
+.dark button.ghost:hover { color: #f7f7f4; }
+.dark input.checkbox { background-color: #26251e; border-color: #4c4a41; }
+.dark input.checkbox:hover { border-color: #807d72; }
+.dark input.checkbox:checked { background-color: #f7f7f4; border-color: #f7f7f4; }
+.dark input.range slidertrack { background-color: #3a3830; }
+.dark input.range sliderbar { background-color: #f7f7f4; }
+.dark input.range sliderbar:hover, .dark input.range sliderbar:active { background-color: #b9b6ac; }
+.dark select { background-color: #26251e; border-color: #4c4a41; }
+.dark select selectarrow { background-color: #2f2e27; border-color: #3a3830; }
+.dark select selectbox { background-color: #26251e; border-color: #4c4a41; }
+.dark select selectbox option:hover { background-color: #2f2e27; }
+.dark select selectbox option:checked { background-color: #3a3830; }
+.dark input.text { background-color: #26251e; border-color: #4c4a41; color: #f7f7f4; caret-color: #f7f7f4; }
+.dark input.text:focus { border-color: #f7f7f4; }
+.dark scrollbarvertical slidertrack { background-color: #1c1b17; }
+.dark scrollbarvertical sliderbar { background-color: #4c4a41; }
+.dark scrollbarvertical sliderbar:hover { background-color: #807d72; }

@@ -4,7 +4,7 @@
 	<link type="text/rcss" href="theme.rcss"/>
 </head>
 <body id="menu" data-model="cfg">
-<handle move_target="#menu"><div class="titlebar">{{version}}<button class="close" data-event-click="close()">x</button></div></handle>
+<handle move_target="#menu"><div class="titlebar">{{version}}<button class="close ghost" data-event-click="close()">x</button></div></handle>
 <tabset id="tabs">
 
 <tab>Status</tab>
@@ -20,6 +20,7 @@
 	<div class="row"><input type="checkbox" data-checked="demo"/> Demo mode (fake roster + events, no TeamSpeak needed)</div>
 	<div class="row"><span class="label">UDP port</span><input type="text" class="num" data-value="port"/></div>
 	<div class="row"><input type="checkbox" data-checked="auto_update"/> Auto-update on launch</div>
+	<div class="row"><input type="checkbox" data-checked="menu_dark"/> Dark menu theme</div>
 	<p class="dim">{{key_name}} toggles this menu (menu_key in the ini)</p>
 </panel>
 
@@ -44,7 +45,7 @@
 	<div class="row"><span class="label">Secondary text</span><colorpicker data-value="text_secondary"/></div>
 	<h2>Font</h2>
 	<div class="row"><span class="label">Font file</span><input type="text" data-value="font_file"/></div>
-	<p class="dim">.ttf relative to the plugins dir, empty = Quicksand; applies on next launch</p>
+	<p class="dim">.ttf relative to the plugins dir, empty = Inter; applies on next launch</p>
 	<div class="row"><span class="label">Font size</span><input type="range" min="6" max="96" step="1" data-value="font_size"/><span class="val">{{font_size}} px</span></div>
 	<h2>Idle</h2>
 	<div class="row"><input type="checkbox" data-checked="fade_when_idle"/> Fade when idle</div>
@@ -182,7 +183,7 @@
 
 </tabset>
 <div class="footer">
-	<button data-event-click="save()">Save</button><button data-event-click="reload()">Reload from disk</button><button data-event-click="reset()">Reset to defaults</button>
+	<button class="primary" data-event-click="save()">Save</button><button data-event-click="reload()">Reload from disk</button><button data-event-click="reset()">Reset to defaults</button>
 	<span class="dim">edits apply live; Save writes YapNotifier.ini</span>
 </div>
 </body>
