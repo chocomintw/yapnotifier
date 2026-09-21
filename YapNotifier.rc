@@ -27,6 +27,30 @@ FX_ASI_BUILD 3889 BEGIN "\0" END
 // the updater ships stays self-contained. Loaded in overlay.cpp via FindResource.
 YAP_FONT RCDATA "assets/Quicksand-Regular.ttf"
 
+// RmlUi documents, styles and icons (assets/ui), served by src/ui_files.cpp: resource name = "UI_" +
+// path upper-cased with every non-alphanumeric turned into "_". Add a line when a file is added.
+UI_HUD_RCSS RCDATA "assets/ui/hud.rcss"
+UI_HUD_RML RCDATA "assets/ui/hud.rml"
+UI_ICONS_BARS_SVG RCDATA "assets/ui/icons/bars.svg"
+UI_ICONS_CHEVRON_SVG RCDATA "assets/ui/icons/chevron.svg"
+UI_ICONS_CIRCLE_SVG RCDATA "assets/ui/icons/circle.svg"
+UI_ICONS_CROWN_SVG RCDATA "assets/ui/icons/crown.svg"
+UI_ICONS_DIAMOND_SVG RCDATA "assets/ui/icons/diamond.svg"
+UI_ICONS_DOT_SVG RCDATA "assets/ui/icons/dot.svg"
+UI_ICONS_MICROPHONE_SVG RCDATA "assets/ui/icons/microphone.svg"
+UI_ICONS_MICROPHONE_MUTED_SVG RCDATA "assets/ui/icons/microphone_muted.svg"
+UI_ICONS_MOON_SVG RCDATA "assets/ui/icons/moon.svg"
+UI_ICONS_RECORD_SVG RCDATA "assets/ui/icons/record.svg"
+UI_ICONS_RING_SVG RCDATA "assets/ui/icons/ring.svg"
+UI_ICONS_SPEAKER_SVG RCDATA "assets/ui/icons/speaker.svg"
+UI_ICONS_SPEAKER_MUTED_SVG RCDATA "assets/ui/icons/speaker_muted.svg"
+UI_ICONS_SQUARE_SVG RCDATA "assets/ui/icons/square.svg"
+UI_ICONS_STAR_SVG RCDATA "assets/ui/icons/star.svg"
+UI_ICONS_TRIANGLE_SVG RCDATA "assets/ui/icons/triangle.svg"
+UI_ICONS_WHISPER_SVG RCDATA "assets/ui/icons/whisper.svg"
+UI_MENU_RML RCDATA "assets/ui/menu.rml"
+UI_THEME_RCSS RCDATA "assets/ui/theme.rcss"
+
 // Version resource: an unsigned binary with no version info weighs against it in Defender /
 // SmartScreen scoring, and gives a player who right-clicks the file nothing to look at.
 // Literal numbers rather than winver.h names so the .rc never needs an include path.

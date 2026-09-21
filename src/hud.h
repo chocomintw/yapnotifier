@@ -1,14 +1,19 @@
 #pragma once
-// Everything drawn while the menu is closed: channel title, roster, toasts and
-// the chat feed. Draws straight into ImGui's background draw list, so nothing
-// here is ever hit-testable.
+// Everything shown while the menu is closed: channel title, roster, toasts, the
+// chat feed and the updater banner. hud.rml (assets/ui) renders a data model
+// that sync() refills every frame; nothing here is ever hit-testable.
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "config.h"
 #include "notify.h"
 #include "roster.h"
 #include "teamspeak.h"
+
+namespace Rml {
+class Context;
+}
 
 namespace yap::hud {
 
@@ -26,7 +31,11 @@ struct State {
 // Routes plugin events into toasts and the chat log.
 void feed(State& st, const Config& cfg, const std::vector<ts::Event>& events, uint64_t now_ms);
 
-void draw(State& st, const Config& cfg, const ts::Snapshot& snap, float dt_ms, uint64_t now_ms);
+// Registers the "hud" data model and loads hud.rml. False = logged, overlay dormant.
+bool init(Rml::Context& ctx);
+
+// Ticks the animations and republishes the view; `notice` is the updater banner or "".
+void sync(State& st, const Config& cfg, const ts::Snapshot& snap, float dt_ms, uint64_t now_ms, const std::string& notice);
 
 // Demo mode: a fixed roster showing every state plus a scripted event stream.
 const ts::Snapshot& demo_snapshot();

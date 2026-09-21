@@ -1,0 +1,191 @@
+/* Dark pastel theme for the INSERT menu (ported from the old ImGui style table).
+   RmlUi ships no default stylesheet, so every widget part is styled here. */
+body {
+	font-family: Yap;
+	font-size: 15dp;
+	color: #e6edf2;
+}
+div, p, h2, hr, tabset, tabs, panels, panel { display: block; }
+b { font-weight: bold; }
+p { margin: 4dp 0; }
+h2 {
+	margin: 12dp 0 4dp 0;
+	padding-bottom: 2dp;
+	font-size: 15dp;
+	color: #b3c1d9;
+	border-bottom: 1dp #59667a;
+}
+hr { height: 1dp; margin: 8dp 0; background-color: #59667ab3; }
+.dim { color: #99a6b3; }
+.warn { color: #ffd94d; }
+
+/* window */
+#menu {
+	position: absolute;
+	left: 60dp;
+	top: 140dp;
+	width: 620dp;
+	background-color: #1f2126;
+	border-radius: 8dp;
+	box-sizing: border-box;
+}
+handle { display: block; }
+.titlebar {
+	padding: 8dp 14dp;
+	background-color: #33404d;
+	border-radius: 8dp 8dp 0 0;
+	font-size: 16dp;
+}
+.footer {
+	padding: 10dp 14dp;
+	border-top: 1dp #59667a66;
+}
+.footer .dim { margin-left: 8dp; font-size: 13dp; }
+
+/* tabs */
+tabs { padding: 6dp 10dp 0 10dp; background-color: #26292f; }
+tab {
+	display: inline-block;
+	padding: 6dp 12dp;
+	margin-right: 2dp;
+	border-radius: 5dp 5dp 0 0;
+	background-color: #424d6bcc;
+	color: #cdd6e0;
+}
+tab:hover { background-color: #5c6b94; color: #fff; }
+tab:selected { background-color: #6b80ad; color: #fff; }
+panel {
+	padding: 12dp 16dp;
+	max-height: 560dp;
+	overflow-y: auto;
+}
+
+/* rows */
+.row { margin: 5dp 0; }
+.label { display: inline-block; width: 190dp; }
+.val { margin-left: 8dp; color: #99a6b3; }
+.ind { margin: 6dp 0 10dp 0; padding: 6dp 8dp; background-color: #24272d; border-radius: 6dp; }
+.pick { padding: 3dp 8dp; margin: 1dp 0; border-radius: 4dp; cursor: pointer; }
+.pick:hover { background-color: #47577a99; }
+.pick.sel { background-color: #5c73a6d9; }
+
+/* buttons */
+button {
+	display: inline-block;
+	padding: 5dp 10dp;
+	margin-right: 6dp;
+	border-radius: 5dp;
+	background-color: #47577ab3;
+	cursor: pointer;
+}
+button:hover { background-color: #5c73a6d9; }
+button:active { background-color: #6680b3; }
+button.close { float: right; padding: 0 8dp; margin: 0; }
+
+/* checkbox */
+input.checkbox {
+	display: inline-block;
+	width: 16dp;
+	height: 16dp;
+	margin-right: 4dp;
+	vertical-align: -3dp;
+	border-radius: 4dp;
+	background-color: #333847;
+	border: 1dp #59667a;
+	cursor: pointer;
+}
+input.checkbox:hover { background-color: #47526b; }
+input.checkbox:checked { background-color: #80a6e6; border-color: #b3c1d9; }
+
+/* range slider */
+input.range {
+	display: inline-block;
+	width: 220dp;
+	height: 18dp;
+	vertical-align: -4dp;
+	cursor: pointer;
+}
+input.range slidertrack {
+	margin-top: 6dp;
+	height: 6dp;
+	border-radius: 3dp;
+	background-color: #333847;
+}
+input.range sliderbar {
+	margin-top: -2dp;
+	width: 12dp;
+	height: 16dp;
+	border-radius: 4dp;
+	background-color: #80a6e6;
+}
+input.range sliderbar:hover, input.range sliderbar:active { background-color: #99bfff; }
+input.range sliderarrowdec, input.range sliderarrowinc { width: 0; height: 0; }
+
+/* select */
+select {
+	display: inline-block;
+	width: 190dp;
+	height: 22dp;
+	vertical-align: -6dp;
+	margin-right: 8dp;
+	border-radius: 4dp;
+	background-color: #333847;
+	cursor: pointer;
+}
+select selectvalue { width: auto; padding: 2dp 8dp; margin-right: 20dp; }
+select selectarrow {
+	width: 20dp;
+	height: 22dp;
+	border-radius: 0 4dp 4dp 0;
+	background-color: #47577a;
+}
+select selectbox {
+	width: 190dp;
+	background-color: #1a1a1ff2;
+	border: 1dp #59667a;
+	border-radius: 0 0 4dp 4dp;
+}
+select selectbox option { padding: 3dp 8dp; }
+select selectbox option:hover { background-color: #47577a; }
+select selectbox option:checked { color: #fff; background-color: #5c73a6; }
+
+/* text input */
+input.text {
+	display: inline-block;
+	width: 300dp;
+	height: 22dp;
+	padding: 1dp 6dp;
+	border-radius: 4dp;
+	background-color: #333847;
+	color: #e6edf2;
+	caret-color: #e6edf2;
+	vertical-align: -6dp;
+	cursor: text;
+	white-space: nowrap;
+	overflow: hidden;
+}
+input.text:focus { background-color: #47526b; }
+input.text.num { width: 80dp; }
+
+/* colour picker (geometry drawn by src/colorpicker.cpp; the hex text is a child span) */
+colorpicker {
+	display: inline-block;
+	width: 120dp;
+	height: 18dp;
+	padding-left: 32dp;
+	box-sizing: border-box;
+	vertical-align: -4dp;
+	line-height: 18dp;
+	font-size: 12dp;
+	color: #99a6b3;
+	cursor: pointer;
+	drag: drag;
+}
+colorpicker.expanded { width: 200dp; height: 146dp; }
+
+/* scrollbars (panels) */
+scrollbarvertical { width: 8dp; margin-left: 4dp; }
+scrollbarvertical slidertrack { background-color: #222529; }
+scrollbarvertical sliderbar { background-color: #4d5a6b; border-radius: 4dp; }
+scrollbarvertical sliderbar:hover { background-color: #5c6b80; }
+scrollbarvertical sliderarrowdec, scrollbarvertical sliderarrowinc { width: 0; height: 0; }

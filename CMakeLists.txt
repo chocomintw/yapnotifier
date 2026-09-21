@@ -11,33 +11,60 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 
+set(YAP_COMMON_DEFS WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)
+set(YAP_COMMON_OPTS /W4 /permissive- /utf-8)
+
 include(FetchContent)
-FetchContent_Declare(imgui
-  GIT_REPOSITORY https://github.com/ocornut/imgui.git
-  GIT_TAG        v1.91.9b)
+# UI stack: RmlUi (HTML/CSS-like documents) on FreeType, with its SVG plugin on LunaSVG for the
+# vector icons. All static; OVERRIDE_FIND_PACKAGE routes RmlUi's find_package() to these fetches.
+set(BUILD_SHARED_LIBS OFF)
+set(FT_DISABLE_ZLIB ON)
+set(FT_DISABLE_BZIP2 ON)
+set(FT_DISABLE_PNG ON)
+set(FT_DISABLE_HARFBUZZ ON)
+set(FT_DISABLE_BROTLI ON)
+set(SKIP_INSTALL_ALL ON)
+set(LUNASVG_BUILD_EXAMPLES OFF)
+set(LUNASVG_DISABLE_LOAD_SYSTEM_FONTS ON)  # never scan the fonts folder from inside the game
+set(RMLUI_SAMPLES OFF)
+set(RMLUI_SVG_PLUGIN ON)
+set(RMLUI_FONT_ENGINE "freetype")
+FetchContent_Declare(Freetype
+  GIT_REPOSITORY https://github.com/freetype/freetype.git
+  GIT_TAG        VER-2-14-3
+  GIT_SHALLOW    TRUE
+  OVERRIDE_FIND_PACKAGE)
+FetchContent_Declare(lunasvg
+  GIT_REPOSITORY https://github.com/sammycage/lunasvg.git
+  GIT_TAG        v3.5.0
+  GIT_SHALLOW    TRUE
+  OVERRIDE_FIND_PACKAGE)
+FetchContent_Declare(RmlUi
+  GIT_REPOSITORY https://github.com/mikke89/RmlUi.git
+  GIT_TAG        6.3
+  GIT_SHALLOW    TRUE)
 FetchContent_Declare(ts3sdk
   GIT_REPOSITORY https://github.com/TeamSpeak-Systems/ts3client-pluginsdk.git
   GIT_TAG        4aa90a53aa150cbf81e13bc97e68c0431b26499f)  # plugin API 26, no release tags upstream
-FetchContent_MakeAvailable(imgui ts3sdk)
+FetchContent_MakeAvailable(Freetype lunasvg)
+add_library(Freetype::Freetype ALIAS freetype)  # the name RmlUi links against; freetype's tree only exports it on install
+FetchContent_MakeAvailable(RmlUi ts3sdk)
 
-# ImGui ships no CMakeLists; core + the two backends we use.
-add_library(imgui STATIC
-  ${imgui_SOURCE_DIR}/imgui.cpp
-  ${imgui_SOURCE_DIR}/imgui_draw.cpp
-  ${imgui_SOURCE_DIR}/imgui_tables.cpp
-  ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-  ${imgui_SOURCE_DIR}/backends/imgui_impl_win32.cpp
-  ${imgui_SOURCE_DIR}/backends/imgui_impl_dx11.cpp)
-target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
-target_link_libraries(imgui PUBLIC d3d11 dxgi d3dcompiler)
-
-set(YAP_COMMON_DEFS WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)
-set(YAP_COMMON_OPTS /W4 /permissive- /utf-8)
+# RmlUi's Win32 + DX11 backends ship as loose sources; build them as our own lib (third-party
+# code, not held to /W4). The DX11 renderer compiles its HLSL at runtime, hence d3dcompiler.
+add_library(rmlui_backend STATIC
+  ${rmlui_SOURCE_DIR}/Backends/RmlUi_Platform_Win32.cpp
+  ${rmlui_SOURCE_DIR}/Backends/RmlUi_Renderer_DX11.cpp)
+target_include_directories(rmlui_backend SYSTEM PUBLIC ${rmlui_SOURCE_DIR}/Backends)
+target_link_libraries(rmlui_backend PUBLIC RmlUi::RmlUi d3d11 dxgi d3dcompiler)
+target_compile_definitions(rmlui_backend PUBLIC ${YAP_COMMON_DEFS})
+set_target_properties(rmlui_core lunasvg plutovg freetype PROPERTIES SYSTEM ON)  # keep /W4 clean on our TUs
 
 # --- FiveM side: YapNotifier.asi ----------------------------------------------
 add_library(YapNotifier SHARED
   src/main.cpp
   src/log.cpp
+  src/colorpicker.cpp
   src/config.cpp
   src/overlay.cpp
   src/hud.cpp
@@ -46,10 +73,11 @@ add_library(YapNotifier SHARED
   src/notify.cpp
   src/roster.cpp
   src/teamspeak.cpp
+  src/ui_files.cpp
   src/update.cpp
   YapNotifier.rc)  # FX_ASI_BUILD resources: FiveM refuses the .asi without them
 target_include_directories(YapNotifier PRIVATE shared)
-target_link_libraries(YapNotifier PRIVATE imgui ws2_32 winhttp bcrypt dcomp dwmapi)
+target_link_libraries(YapNotifier PRIVATE rmlui_backend ws2_32 winhttp bcrypt dcomp dwmapi)
 target_compile_definitions(YapNotifier PRIVATE ${YAP_COMMON_DEFS})
 target_compile_options(YapNotifier PRIVATE ${YAP_COMMON_OPTS})
 set_target_properties(YapNotifier PROPERTIES PREFIX "" SUFFIX ".asi")
@@ -91,3 +119,10 @@ target_link_libraries(test_parser PRIVATE ws2_32 winhttp bcrypt)
 target_compile_definitions(test_parser PRIVATE ${YAP_COMMON_DEFS})
 target_compile_options(test_parser PRIVATE ${YAP_COMMON_OPTS})
 add_test(NAME parser COMMAND test_parser)
+
+add_executable(test_ui tests/test_ui.cpp src/hud.cpp src/menu.cpp src/colorpicker.cpp src/icons.cpp src/ui_files.cpp src/log.cpp src/config.cpp src/notify.cpp src/roster.cpp src/teamspeak.cpp src/update.cpp)
+target_include_directories(test_ui PRIVATE src shared)
+target_link_libraries(test_ui PRIVATE RmlUi::RmlUi ws2_32 winhttp bcrypt)
+target_compile_definitions(test_ui PRIVATE ${YAP_COMMON_DEFS})
+target_compile_options(test_ui PRIVATE ${YAP_COMMON_OPTS})
+add_test(NAME ui COMMAND test_ui WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/assets/ui)

@@ -1,6 +1,6 @@
 #include "hud.h"
 
-#include <imgui.h>
+#include <RmlUi/Core.h>
 
 #include <algorithm>
 #include <cmath>
@@ -8,6 +8,7 @@
 #include <string>
 
 #include "icons.h"
+#include "log.h"
 #include "yap_protocol.h"
 
 namespace yap::hud {
@@ -15,62 +16,74 @@ namespace {
 namespace proto = yap::proto;
 constexpr float kPi = 3.14159265358979323846f;
 
-struct Ctx {
-    ImDrawList* dl;
-    ImFont* font;
-    float fs;       // scaled font size
-    float scale;
-    float master;   // master opacity incl. idle fade
-    ImVec2 display;
-    const Config& cfg;
-    double t;       // seconds, for the pulse
+// What hud.rml binds to. Colours are "#RRGGBBAA", sizes "<n>dp" so the RCSS can use them verbatim.
+struct IconView {
+    std::string src, color;
+    float opacity = 1.f;
+};
+struct RowView {
+    std::string name, name_color, tag, tag_color;
+    float opacity = 1.f;
+    std::vector<IconView> leading, trailing;
+};
+struct ToastView {
+    std::string prefix, text, color, border;
+    float opacity = 1.f;
+};
+struct ChatView {
+    std::string prefix, body;
+};
+struct View {
+    // config-derived look
+    std::string font_size = "16dp", icon_size = "10dp", row_gap = "2dp", max_name = "180dp";
+    std::string text_color = "#FFFFFFFF", text_secondary = "#FFFFFFFF";
+    bool shadow = false, outline = false;
+    // roster block
+    bool show_roster = false, panel = false, legacy = false;
+    float roster_opacity = 1.f;
+    std::string panel_color = "transparent", radius = "0dp", title, title_color = "#FFFFFFFF", title_icon;
+    std::string title_icon_color = "#FFFFFFFF", more;
+    std::vector<RowView> rows;
+    // toasts
+    bool accent_bar = true;
+    std::string notif_width = "280dp", notif_bg = "#00000000";
+    std::vector<ToastView> toasts;
+    // chat
+    std::string chat_width = "420dp", chat_bg = "#00000000", chat_sender_color = "#FFFFFFFF";
+    std::vector<ChatView> chat;
+    std::string notice;
 };
 
-Color alpha(Color c, float a) { return icons::with_alpha(c, a); }
+View g_view;
+Rml::DataModelHandle g_model;
+Rml::ElementDocument* g_doc = nullptr;
 
-ImVec2 text_size(const Ctx& c, const std::string& s, float size = 0.f, float wrap = 0.f) {
-    return c.font->CalcTextSizeA(size > 0.f ? size : c.fs, FLT_MAX, wrap, s.c_str());
+std::string dp(float v) { return std::to_string(static_cast<int>(std::lround(v))) + "dp"; }
+std::string hex(Color c, float alpha = 1.f) { return config::format_color(icons::with_alpha(c, alpha)); }
+
+// Sets a property only when its value changed, so per-frame syncs never dirty layout.
+void set_prop(Rml::Element* el, const char* name, const std::string& value) {
+    const Rml::Property* cur = el->GetLocalProperty(name);
+    if (cur && cur->ToString() == value) return;
+    el->SetProperty(name, value);
 }
 
-void text(const Ctx& c, ImVec2 pos, Color color, const std::string& s, float size = 0.f, float wrap = 0.f) {
-    if (s.empty()) return;
-    const float sz = size > 0.f ? size : c.fs;
-    const float a = static_cast<float>(color >> 24) / 255.f;
-    if (c.cfg.text_outline) {
-        const Color oc = alpha(rgba(0, 0, 0, 230), a);
-        for (int dx = -1; dx <= 1; ++dx)
-            for (int dy = -1; dy <= 1; ++dy)
-                if (dx || dy)
-                    c.dl->AddText(c.font, sz, {pos.x + static_cast<float>(dx), pos.y + static_cast<float>(dy)}, oc,
-                                  s.c_str(), nullptr, wrap);
-    } else if (c.cfg.text_shadow) {
-        c.dl->AddText(c.font, sz, {pos.x + 1.f, pos.y + 1.f}, alpha(rgba(0, 0, 0, 190), a), s.c_str(), nullptr, wrap);
-    }
-    c.dl->AddText(c.font, sz, pos, color, s.c_str(), nullptr, wrap);
-}
-
-// Top-left of a w x h block placed `x, y` px inwards from the anchored edge.
-ImVec2 anchor_pos(Anchor a, float x, float y, float w, float h, ImVec2 display) {
+// 9-point anchoring: pin the edge(s) the anchor names; centre rows/columns sit at 50%
+// and are pulled back by half their own size (same placement as the pre-RmlUi HUD).
+void place(Rml::Element* el, Anchor a, float x, float y) {
     const int col = static_cast<int>(a) % 3, row = static_cast<int>(a) / 3;
-    float px = col == 0 ? x : col == 1 ? (display.x - w) * 0.5f + x : display.x - w - x;
-    float py = row == 0 ? y : row == 1 ? (display.y - h) * 0.5f + y : display.y - h - y;
-    px = std::clamp(px, 0.f, std::max(0.f, display.x - w));
-    py = std::clamp(py, 0.f, std::max(0.f, display.y - h));
-    return {px, py};
-}
-
-float align_of(Anchor a) {
-    const int col = static_cast<int>(a) % 3;
-    return col == 0 ? 0.f : col == 1 ? 0.5f : 1.f;
-}
-
-std::string ellipsize(const Ctx& c, std::string s, float max_w) {
-    if (max_w <= 0.f || text_size(c, s).x <= max_w) return s;
-    while (!s.empty() && text_size(c, s + "...").x > max_w) {
-        s.pop_back();
-        while (!s.empty() && (static_cast<unsigned char>(s.back()) & 0xC0) == 0x80) s.pop_back();
-    }
-    return s + "...";
+    set_prop(el, "left", col == 0 ? dp(x) : col == 1 ? "50%" : "auto");
+    set_prop(el, "right", col == 2 ? dp(x) : "auto");
+    set_prop(el, "top", row == 0 ? dp(y) : row == 1 ? "50%" : "auto");
+    set_prop(el, "bottom", row == 2 ? dp(y) : "auto");
+    set_prop(el, "margin-left", col == 1 ? dp(x) : "0px");
+    set_prop(el, "margin-top", row == 1 ? dp(y) : "0px");
+    std::string tf = "none";
+    if (col == 1 && row == 1) tf = "translate(-50%, -50%)";
+    else if (col == 1) tf = "translateX(-50%)";
+    else if (row == 1) tf = "translateY(-50%)";
+    set_prop(el, "transform", tf);
+    set_prop(el, "text-align", col == 0 ? "left" : col == 1 ? "center" : "right");
 }
 
 std::string title_text(const Config& cfg, const ts::Snapshot& snap, const ChannelOverride* ov) {
@@ -89,184 +102,90 @@ std::string title_text(const Config& cfg, const ts::Snapshot& snap, const Channe
 }
 
 // --- roster block -----------------------------------------------------------------
-struct Row {
-    roster::Resolved r;
-    std::string name;  // ellipsized
-    float w = 0.f;
-};
-
-void draw_roster(const Ctx& c, State& st, const ts::Snapshot& snap) {
-    const Config& cfg = c.cfg;
+void sync_roster(View& v, State& st, const Config& cfg, const ts::Snapshot& snap, float master, double t) {
     const bool live = snap.alive && snap.conn == 2;
-    if (!live && !cfg.show_when_disconnected) return;
+    v.show_roster = live || cfg.show_when_disconnected;
+    v.rows.clear();
+    v.title.clear();
+    v.title_icon.clear();
+    v.more.clear();
+    v.legacy = false;
+    if (!v.show_roster) return;
 
     const ChannelOverride* chov = nullptr;
     if (auto it = cfg.channels.find(snap.channel_id); live && it != cfg.channels.end()) chov = &it->second;
-    const float block_alpha = c.master * (chov && chov->opacity >= 0.f ? chov->opacity : 1.f) * (live ? 1.f : 0.8f);
+    v.roster_opacity = master * (chov && chov->opacity >= 0.f ? chov->opacity : 1.f) * (live ? 1.f : 0.8f);
 
-    const float icon = cfg.icon_size * c.scale;
-    const float gap = 4.f * c.scale;
-    const float row_h = c.fs + cfg.row_spacing * c.scale;
-    const float title_fs = c.fs * 1.15f;
-    const float pad = cfg.show_panel ? 8.f * c.scale : 0.f;
-
-    // measure
-    std::string title;
     Color title_color = cfg.title_color;
     if (live && cfg.show_title) {
-        title = title_text(cfg, snap, chov);
+        v.title = title_text(cfg, snap, chov);
         if (chov && chov->title_color) title_color = chov->title_color;
+        if (chov && chov->icon != IconShape::None) v.title_icon = icons::svg(chov->icon);
+        v.title_icon_color = hex(chov ? chov->icon_color : cfg.title_color);
     } else if (!live) {
-        title = cfg.disconnected_text;
+        v.title = cfg.disconnected_text;
         title_color = cfg.text_secondary;
     }
-    float title_w = title.empty() ? 0.f : text_size(c, title, title_fs).x;
-    if (chov && chov->icon != IconShape::None && !title.empty()) title_w += icon + gap;
+    v.title_color = hex(title_color);
+    if (!live) return;
 
-    std::vector<Row> rows;
+    auto users = roster::visible(snap, cfg);
     int overflow = 0;
-    std::string legacy_line;
-    if (live) {
-        auto users = roster::visible(snap, cfg);
-        if (users.size() > static_cast<size_t>(cfg.max_visible_users)) {
-            overflow = static_cast<int>(users.size()) - cfg.max_visible_users;
-            users.resize(static_cast<size_t>(cfg.max_visible_users));
-        }
-        for (const ts::User* u : users) {
-            Row row;
-            row.r = roster::resolve(*u, cfg, st.env.level(u->uid));
-            row.name = ellipsize(c, row.r.name, cfg.max_name_width * c.scale);
-            row.w = text_size(c, row.name).x;
-            if (!row.r.tag.empty()) row.w += text_size(c, "[" + row.r.tag + "] ").x;
-            row.w += static_cast<float>(row.r.leading.size() + row.r.trailing.size()) * (icon + gap);
-            rows.push_back(std::move(row));
-        }
-        if (snap.legacy) legacy_line = "TS3 plugin outdated: install YapNotifier.ts3_plugin";
+    if (users.size() > static_cast<size_t>(cfg.max_visible_users)) {
+        overflow = static_cast<int>(users.size()) - cfg.max_visible_users;
+        users.resize(static_cast<size_t>(cfg.max_visible_users));
     }
-    std::string more = overflow > 0 && cfg.show_overflow_count ? "+" + std::to_string(overflow) + " more" : "";
-
-    float w = title_w;
-    for (const auto& r : rows) w = std::max(w, r.w);
-    if (!more.empty()) w = std::max(w, text_size(c, more).x);
-    if (!legacy_line.empty()) w = std::max(w, text_size(c, legacy_line).x);
-    float h = (title.empty() ? 0.f : title_fs + cfg.row_spacing * c.scale) + row_h * static_cast<float>(rows.size()) +
-              (more.empty() ? 0.f : row_h) + (legacy_line.empty() ? 0.f : row_h);
-    if (w <= 0.f || h <= 0.f) return;
-
-    const ImVec2 origin = anchor_pos(cfg.anchor, cfg.pos_x, cfg.pos_y, w + pad * 2, h + pad * 2, c.display);
-    const float align = align_of(cfg.anchor);
-    if (cfg.show_panel)
-        icons::panel(c.dl, origin.x, origin.y, w + pad * 2, h + pad * 2, cfg.corner_radius, alpha(cfg.panel_color, block_alpha),
-                     0, 0.f);
-
-    float y = origin.y + pad;
-    const float x0 = origin.x + pad;
-    if (!title.empty()) {
-        float x = x0 + (w - title_w) * align;
-        if (chov && chov->icon != IconShape::None) {
-            icons::draw(c.dl, chov->icon, x + icon * 0.5f, y + title_fs * 0.5f, icon, alpha(chov->icon_color, block_alpha));
-            x += icon + gap;
-        }
-        text(c, {x, y}, alpha(title_color, block_alpha), title, title_fs);
-        y += title_fs + cfg.row_spacing * c.scale;
-    }
-    for (const auto& row : rows) {
-        const float a = block_alpha * row.r.opacity;
-        float x = x0 + (w - row.w) * align;
-        const float cy = y + c.fs * 0.5f;
-        for (const auto& ic : row.r.leading) {
-            icons::draw(c.dl, ic.shape, x + icon * 0.5f, cy, icon, alpha(ic.color, a));
-            x += icon + gap;
-        }
-        if (!row.r.tag.empty()) {
-            const std::string tag = "[" + row.r.tag + "] ";
-            text(c, {x, y}, alpha(row.r.tag_color, a), tag);
-            x += text_size(c, tag).x;
-        }
-        text(c, {x, y}, alpha(row.r.name_color, a), row.name);
-        x += text_size(c, row.name).x + gap;
-        for (const auto& ic : row.r.trailing) {
-            float ia = a;
-            if (ic.shape == cfg.ind[IndSpeaking].icon && row.r.level > 0.f) {
-                ia *= row.r.level;
-                if (cfg.pulse) ia *= 1.f - 0.35f * (0.5f + 0.5f * std::sin(static_cast<float>(c.t) * 2.f * kPi * cfg.pulse_hz));
+    for (const ts::User* u : users) {
+        roster::Resolved r = roster::resolve(*u, cfg, st.env.level(u->uid));
+        RowView row;
+        row.name = r.name;
+        row.name_color = hex(r.name_color);
+        row.tag = r.tag;
+        row.tag_color = hex(r.tag_color);
+        row.opacity = r.opacity;
+        for (const auto& ic : r.leading) row.leading.push_back({icons::svg(ic.shape), hex(ic.color), 1.f});
+        for (const auto& ic : r.trailing) {
+            float ia = 1.f;
+            if (ic.shape == cfg.ind[IndSpeaking].icon && r.level > 0.f) {
+                ia = r.level;
+                if (cfg.pulse) ia *= 1.f - 0.35f * (0.5f + 0.5f * std::sin(static_cast<float>(t) * 2.f * kPi * cfg.pulse_hz));
             }
-            icons::draw(c.dl, ic.shape, x + icon * 0.5f, cy, icon, alpha(ic.color, ia));
-            x += icon + gap;
+            row.trailing.push_back({icons::svg(ic.shape), hex(ic.color), ia});
         }
-        y += row_h;
+        v.rows.push_back(std::move(row));
     }
-    if (!more.empty()) {
-        text(c, {x0 + (w - text_size(c, more).x) * align, y}, alpha(cfg.text_secondary, block_alpha), more);
-        y += row_h;
-    }
-    if (!legacy_line.empty())
-        text(c, {x0 + (w - text_size(c, legacy_line).x) * align, y}, alpha(rgba(255, 217, 77), block_alpha), legacy_line);
+    if (overflow > 0 && cfg.show_overflow_count) v.more = "+" + std::to_string(overflow) + " more";
+    v.legacy = snap.legacy;
 }
 
 // --- toasts ---------------------------------------------------------------------------
-void draw_toasts(const Ctx& c, State& st) {
-    const Config& cfg = c.cfg;
-    if (!cfg.notif_enabled || st.toasts.items().empty()) return;
-    const float pad_x = 10.f * c.scale, pad_y = 6.f * c.scale, spacing = 6.f * c.scale;
-    const float bar = cfg.notif_accent_bar ? 3.f * c.scale : 0.f;
-    const float width = cfg.notif_width * c.scale;
-    const float wrap = width - pad_x * 2 - bar;
-
-    struct Box {
-        std::string line;
-        float h;
-        Color col;
-        float a;
-    };
-    std::vector<Box> boxes;
-    float total = 0.f;
+void sync_toasts(View& v, State& st, const Config& cfg, float master) {
+    v.toasts.clear();
+    if (!cfg.notif_enabled) return;
     for (const auto& t : st.toasts.items()) {
-        Box b;
-        b.line = std::string(kNotifPrefixes[t.cat]) + " " + t.text + (t.count > 1 ? " x" + std::to_string(t.count) : "");
-        b.h = text_size(c, b.line, 0.f, wrap).y + pad_y * 2;
-        b.col = cfg.notif[t.cat].color;
-        b.a = notify::Queue::alpha(t, cfg) * c.master;
-        total += b.h + spacing;
-        boxes.push_back(std::move(b));
+        const Color col = cfg.notif[t.cat].color;
+        ToastView b;
+        b.prefix = kNotifPrefixes[t.cat];
+        b.text = t.text + (t.count > 1 ? " x" + std::to_string(t.count) : "");
+        b.color = hex(col);
+        b.border = hex(col, 0.55f);
+        b.opacity = notify::Queue::alpha(t, cfg) * master;
+        v.toasts.push_back(std::move(b));
     }
-    total -= spacing;
-    const ImVec2 origin = anchor_pos(cfg.notif_anchor, cfg.notif_x, cfg.notif_y, width, total, c.display);
-    // newest last in the vector; stack down = oldest on top.
-    float y = cfg.notif_stack_up ? origin.y + total : origin.y;
-    for (const auto& b : boxes) {
-        if (cfg.notif_stack_up) y -= b.h;
-        icons::panel(c.dl, origin.x, y, width, b.h, 2.f * c.scale, alpha(cfg.notif_background, b.a), alpha(b.col, b.a * 0.55f),
-                     1.f);
-        if (bar > 0.f) c.dl->AddRectFilled({origin.x, y}, {origin.x + bar, y + b.h}, alpha(b.col, b.a));
-        text(c, {origin.x + bar + pad_x, y + pad_y}, alpha(cfg.text_color, b.a), b.line, 0.f, wrap);
-        // prefix in the category colour on top of the body text
-        const size_t sp = b.line.find(' ');
-        text(c, {origin.x + bar + pad_x, y + pad_y}, alpha(b.col, b.a), b.line.substr(0, sp));
-        y += cfg.notif_stack_up ? -spacing : b.h + spacing;
-    }
+    // Items are oldest first; stacking down shows the oldest on top, stacking up flips it.
+    if (cfg.notif_stack_up) std::reverse(v.toasts.begin(), v.toasts.end());
 }
 
 // --- chat feed -------------------------------------------------------------------
-void draw_chat(const Ctx& c, State& st, uint64_t now_ms) {
-    const Config& cfg = c.cfg;
+void sync_chat(View& v, State& st, const Config& cfg, uint64_t now_ms) {
+    v.chat.clear();
     if (!cfg.chat_enabled) return;
     std::vector<const notify::ChatLine*> lines;
     for (auto it = st.chat.rbegin(); it != st.chat.rend() && lines.size() < static_cast<size_t>(cfg.chat_max_visible); ++it)
         if (notify::chat_visible(*it, cfg, now_ms)) lines.push_back(&*it);
-    if (lines.empty()) return;
     if (!cfg.chat_newest_top) std::reverse(lines.begin(), lines.end());
-
-    const float pad = 6.f * c.scale, width = cfg.chat_width * c.scale, wrap = width - pad * 2;
-    const float small = c.fs * 0.95f;
-    struct L {
-        std::string prefix, body;
-        float h;
-    };
-    std::vector<L> laid;
-    float total = pad * 2;
     for (const auto* l : lines) {
-        L x;
+        ChatView x;
         char ts[8] = {};
         if (cfg.chat_timestamp) std::snprintf(ts, sizeof ts, "%02d:%02d ", l->hour, l->minute);
         x.prefix = ts;
@@ -274,27 +193,7 @@ void draw_chat(const Ctx& c, State& st, uint64_t now_ms) {
         if (cfg.chat_channel_name && !l->channel.empty()) x.prefix += "[" + l->channel + "] ";
         if (cfg.chat_sender) x.prefix += l->sender + ": ";
         x.body = l->text;
-        const float pw = text_size(c, x.prefix, small).x;
-        x.h = pw + text_size(c, x.body, small).x <= wrap
-                  ? small
-                  : text_size(c, x.prefix + x.body, small, wrap).y;
-        total += x.h + 2.f * c.scale;
-        laid.push_back(std::move(x));
-    }
-    const ImVec2 origin = anchor_pos(cfg.chat_anchor, cfg.chat_x, cfg.chat_y, width, total, c.display);
-    icons::panel(c.dl, origin.x, origin.y, width, total, 4.f * c.scale, alpha(cfg.chat_background, c.master), 0, 0.f);
-    float y = origin.y + pad;
-    for (const auto& l : laid) {
-        const float pw = text_size(c, l.prefix, small).x;
-        text(c, {origin.x + pad, y}, alpha(cfg.chat_sender_color, c.master), l.prefix, small);
-        if (pw + text_size(c, l.body, small).x <= wrap) {
-            text(c, {origin.x + pad + pw, y}, alpha(cfg.text_color, c.master), l.body, small);
-        } else {
-            // Wrapped: draw prefix+body together so the wrap accounts for the prefix, body colour wins.
-            text(c, {origin.x + pad, y}, alpha(cfg.text_color, c.master), l.prefix + l.body, small, wrap);
-            text(c, {origin.x + pad, y}, alpha(cfg.chat_sender_color, c.master), l.prefix, small);
-        }
-        y += l.h + 2.f * c.scale;
+        v.chat.push_back(std::move(x));
     }
 }
 }  // namespace
@@ -320,7 +219,84 @@ void feed(State& st, const Config& cfg, const std::vector<ts::Event>& events, ui
     }
 }
 
-void draw(State& st, const Config& cfg, const ts::Snapshot& snap, float dt_ms, uint64_t now_ms) {
+bool init(Rml::Context& ctx) {
+    Rml::DataModelConstructor m = ctx.CreateDataModel("hud");
+    if (!m) {
+        log::error("hud: could not create the data model");
+        return false;
+    }
+    if (auto h = m.RegisterStruct<IconView>()) {
+        h.RegisterMember("src", &IconView::src);
+        h.RegisterMember("color", &IconView::color);
+        h.RegisterMember("opacity", &IconView::opacity);
+    }
+    m.RegisterArray<std::vector<IconView>>();
+    if (auto h = m.RegisterStruct<RowView>()) {
+        h.RegisterMember("name", &RowView::name);
+        h.RegisterMember("name_color", &RowView::name_color);
+        h.RegisterMember("tag", &RowView::tag);
+        h.RegisterMember("tag_color", &RowView::tag_color);
+        h.RegisterMember("opacity", &RowView::opacity);
+        h.RegisterMember("leading", &RowView::leading);
+        h.RegisterMember("trailing", &RowView::trailing);
+    }
+    m.RegisterArray<std::vector<RowView>>();
+    if (auto h = m.RegisterStruct<ToastView>()) {
+        h.RegisterMember("prefix", &ToastView::prefix);
+        h.RegisterMember("text", &ToastView::text);
+        h.RegisterMember("color", &ToastView::color);
+        h.RegisterMember("border", &ToastView::border);
+        h.RegisterMember("opacity", &ToastView::opacity);
+    }
+    m.RegisterArray<std::vector<ToastView>>();
+    if (auto h = m.RegisterStruct<ChatView>()) {
+        h.RegisterMember("prefix", &ChatView::prefix);
+        h.RegisterMember("body", &ChatView::body);
+    }
+    m.RegisterArray<std::vector<ChatView>>();
+
+    View& v = g_view;
+    m.Bind("font_size", &v.font_size);
+    m.Bind("icon_size", &v.icon_size);
+    m.Bind("row_gap", &v.row_gap);
+    m.Bind("max_name", &v.max_name);
+    m.Bind("text_color", &v.text_color);
+    m.Bind("text_secondary", &v.text_secondary);
+    m.Bind("shadow", &v.shadow);
+    m.Bind("outline", &v.outline);
+    m.Bind("show_roster", &v.show_roster);
+    m.Bind("panel", &v.panel);
+    m.Bind("legacy", &v.legacy);
+    m.Bind("roster_opacity", &v.roster_opacity);
+    m.Bind("panel_color", &v.panel_color);
+    m.Bind("radius", &v.radius);
+    m.Bind("title", &v.title);
+    m.Bind("title_color", &v.title_color);
+    m.Bind("title_icon", &v.title_icon);
+    m.Bind("title_icon_color", &v.title_icon_color);
+    m.Bind("more", &v.more);
+    m.Bind("rows", &v.rows);
+    m.Bind("accent_bar", &v.accent_bar);
+    m.Bind("notif_width", &v.notif_width);
+    m.Bind("notif_bg", &v.notif_bg);
+    m.Bind("toasts", &v.toasts);
+    m.Bind("chat_width", &v.chat_width);
+    m.Bind("chat_bg", &v.chat_bg);
+    m.Bind("chat_sender_color", &v.chat_sender_color);
+    m.Bind("chat", &v.chat);
+    m.Bind("notice", &v.notice);
+    g_model = m.GetModelHandle();
+
+    g_doc = ctx.LoadDocument("hud.rml");
+    if (!g_doc) {
+        log::error("hud: could not load hud.rml");
+        return false;
+    }
+    g_doc->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
+    return true;
+}
+
+void sync(State& st, const Config& cfg, const ts::Snapshot& snap, float dt_ms, uint64_t now_ms, const std::string& notice) {
     st.env.tick(snap.users, dt_ms, cfg);
     st.toasts.tick(dt_ms, cfg);
 
@@ -328,19 +304,36 @@ void draw(State& st, const Config& cfg, const ts::Snapshot& snap, float dt_ms, u
     st.idle_ms = busy ? 0.f : st.idle_ms + dt_ms;
     const float target = cfg.fade_when_idle && st.idle_ms > static_cast<float>(cfg.idle_after_ms) ? 1.f : 0.f;
     st.idle_fade += (target - st.idle_fade) * std::min(1.f, dt_ms / 400.f);
+    const float master = cfg.master_opacity * (1.f - st.idle_fade * (1.f - cfg.idle_opacity));
 
-    ImFont* font = ImGui::GetFont();
-    Ctx c{ImGui::GetBackgroundDrawList(),
-          font,
-          font->FontSize * cfg.scale,
-          cfg.scale,
-          cfg.master_opacity * (1.f - st.idle_fade * (1.f - cfg.idle_opacity)),
-          ImGui::GetIO().DisplaySize,
-          cfg,
-          static_cast<double>(now_ms) / 1000.0};
-    draw_roster(c, st, snap);
-    draw_toasts(c, st);
-    draw_chat(c, st, now_ms);
+    View& v = g_view;
+    v.font_size = dp(cfg.font_size);
+    v.icon_size = dp(cfg.icon_size);
+    v.row_gap = dp(cfg.row_spacing);
+    v.max_name = dp(cfg.max_name_width);
+    v.text_color = hex(cfg.text_color);
+    v.text_secondary = hex(cfg.text_secondary);
+    v.shadow = cfg.text_shadow && !cfg.text_outline;
+    v.outline = cfg.text_outline;
+    v.panel = cfg.show_panel;
+    v.panel_color = cfg.show_panel ? hex(cfg.panel_color) : "transparent";
+    v.radius = dp(cfg.corner_radius);
+    v.accent_bar = cfg.notif_accent_bar;
+    v.notif_width = dp(cfg.notif_width);
+    v.notif_bg = hex(cfg.notif_background);
+    v.chat_width = dp(cfg.chat_width);
+    v.chat_bg = hex(cfg.chat_background, master);
+    v.chat_sender_color = hex(cfg.chat_sender_color);
+    v.notice = notice;
+    sync_roster(v, st, cfg, snap, master, static_cast<double>(now_ms) / 1000.0);
+    sync_toasts(v, st, cfg, master);
+    sync_chat(v, st, cfg, now_ms);
+
+    place(g_doc->GetElementById("roster"), cfg.anchor, cfg.pos_x, cfg.pos_y);
+    place(g_doc->GetElementById("toasts"), cfg.notif_anchor, cfg.notif_x, cfg.notif_y);
+    place(g_doc->GetElementById("chat"), cfg.chat_anchor, cfg.chat_x, cfg.chat_y);
+    set_prop(g_doc->GetElementById("chat"), "opacity", std::to_string(master));
+    g_model.DirtyAllVariables();
 }
 
 // --- demo --------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 #pragma once
-// Toast queue, chat log and template formatting. Pure logic (no ImGui) so the
+// Toast queue, chat log and template formatting. Pure logic (no UI library) so the
 // host-side test can exercise the lifecycle.
 #include <cstdint>
 #include <initializer_list>
