@@ -66,6 +66,7 @@ int main() {
 
     // A few frames of demo data through every anchor exercises each data-* binding.
     for (int frame = 0; frame < 30; ++frame) {
+        yap::hud::edit(frame % 2 ? &cfg : nullptr);  // edit mode every other frame: grips + drag styling
         cfg.anchor = static_cast<yap::Anchor>(frame % 9);
         cfg.notif_anchor = static_cast<yap::Anchor>((frame + 3) % 9);
         cfg.chat_anchor = static_cast<yap::Anchor>((frame + 6) % 9);

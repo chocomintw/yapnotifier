@@ -13,6 +13,11 @@ float clamp_offset(float offset, float size, float extent, bool centred) {
     return centred ? std::clamp(offset, -room / 2.f, room / 2.f) : std::clamp(offset, 0.f, room);
 }
 
+void drag_offset(Anchor a, float dx, float dy, float& x, float& y) {
+    x += static_cast<int>(a) % 3 == 2 ? -dx : dx;
+    y += static_cast<int>(a) / 3 == 2 ? -dy : dy;
+}
+
 Color lerp(Color a, Color b, float t) {
     t = t < 0.f ? 0.f : t > 1.f ? 1.f : t;
     Color out = 0;

@@ -263,6 +263,7 @@ LRESULT CALLBACK wndproc(HWND h, UINT m, WPARAM w, LPARAM l) {
                 g_menu_host->open = open;
                 menu::show(open);
             }
+            hud::edit(open ? &g_cfg : nullptr);
             if (open) {
                 SetForegroundWindow(h);
                 SetFocus(h);
@@ -279,7 +280,15 @@ LRESULT CALLBACK wndproc(HWND h, UINT m, WPARAM w, LPARAM l) {
             return 0;
     }
     // Input only reaches us while the menu is open (closed, the window is click-through).
-    if (g_menu_ctx && !RmlWin32::WindowProcedure(g_menu_ctx, g_ime, h, m, w, l)) return 0;
+    // The menu gets everything first; the HUD (draggable blocks in edit mode) gets the mouse
+    // presses the menu left alone, and every move/release so a drag let go over the menu ends.
+    if (g_menu_ctx) {
+        const bool free = RmlWin32::WindowProcedure(g_menu_ctx, g_ime, h, m, w, l);
+        const bool mouse = m >= WM_MOUSEFIRST && m <= WM_MOUSELAST;
+        const bool release = m == WM_MOUSEMOVE || m == WM_LBUTTONUP || m == WM_RBUTTONUP || m == WM_MBUTTONUP;
+        if (g_rml && mouse && (free || release) && !RmlWin32::WindowProcedure(g_rml, g_ime, h, m, w, l)) return 0;
+        if (!free) return 0;
+    }
     return DefWindowProcW(h, m, w, l);
 }
 

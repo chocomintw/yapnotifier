@@ -199,6 +199,13 @@ int main() {
         CHECK(yap::roster::clamp_offset(4000.f, 200.f, 1920.f, false) == 1720.f);
         CHECK(yap::roster::clamp_offset(-5.f, 200.f, 1920.f, false) == 0.f);
         CHECK(yap::roster::clamp_offset(100.f, 200.f, 1920.f, false) == 100.f);
+        float x = 10.f, y = 10.f;
+        yap::roster::drag_offset(yap::Anchor::TopLeft, 5.f, -3.f, x, y);
+        CHECK(x == 15.f && y == 7.f);
+        yap::roster::drag_offset(yap::Anchor::BottomRight, 5.f, -3.f, x, y);
+        CHECK(x == 10.f && y == 10.f);
+        yap::roster::drag_offset(yap::Anchor::MiddleCenter, 5.f, -3.f, x, y);
+        CHECK(x == 15.f && y == 7.f);
         CHECK(yap::roster::clamp_offset(4000.f, 200.f, 1920.f, true) == 860.f);
         CHECK(yap::roster::clamp_offset(-4000.f, 200.f, 1920.f, true) == -860.f);
         CHECK(yap::roster::clamp_offset(50.f, 3000.f, 1920.f, false) == 0.f);  // bigger than the screen: pin

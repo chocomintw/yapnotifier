@@ -8,6 +8,47 @@ body {
 }
 div { display: block; }
 .block { position: absolute; }
+/* edit mode (menu open): every block becomes a DESIGN.md feature-card (theme surface, 1dp
+   hairline, rounded.lg, 16dp padding, no shadow) with a header row - a timeline pill in the
+   primary voltage naming the block and a muted hint - under a hairline. Drag anywhere on it. */
+.edit .block {
+	pointer-events: auto;
+	drag: drag;
+	border-width: 1dp;
+	border-radius: 12dp;
+	padding: 16dp;
+	font-effect: none;
+	cursor: move;
+}
+/* ids outrank .edit .block, so the roster's panel and the chat card restate the card metrics */
+.edit #roster, .edit #roster.panel { padding: 16dp; }
+.edit #chat { padding: 16dp; border-radius: 12dp; }
+.grip {
+	border-bottom-width: 1dp;
+	padding-bottom: 10dp;
+	margin-bottom: 12dp;
+	white-space: nowrap;
+}
+.grip .pill {
+	display: inline-block;
+	vertical-align: middle;
+	padding: 4dp 10dp;
+	border-radius: 99dp;
+	font-size: 11dp;
+	font-weight: 600;
+	letter-spacing: 0.88dp;
+	text-transform: uppercase;
+	color: #ffffff;
+	background-color: #f54e00;
+}
+.block:active .grip .pill { background-color: #d04200; }
+.grip .hint {
+	display: inline-block;
+	vertical-align: middle;
+	margin-left: 10dp;
+	font-size: 12dp;
+	font-weight: 400;
+}
 .shadow { font-effect: shadow(1dp 1dp #000000be); }
 .outline { font-effect: outline(1dp #000000e6); }
 

@@ -1,7 +1,8 @@
 #pragma once
 // Everything shown while the menu is closed: channel title, roster, toasts, the
 // chat feed and the updater banner. hud.rml (assets/ui) renders a data model
-// that sync() refills every frame; nothing here is ever hit-testable.
+// that sync() refills every frame. Nothing here is hit-testable except in edit
+// mode (menu open), where the blocks can be dragged to set their offsets.
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -33,6 +34,10 @@ void feed(State& st, const Config& cfg, const std::vector<ts::Event>& events, ui
 
 // Registers the "hud" data model and loads hud.rml. False = logged, overlay dormant.
 bool init(Rml::Context& ctx);
+
+// Edit mode: while `cfg` is set every block is shown and draggable, and a drag writes the
+// new offset straight into it (the menu's sliders follow). nullptr ends it.
+void edit(Config* cfg);
 
 // Ticks the animations and republishes the view; `notice` is the updater banner or "".
 void sync(State& st, const Config& cfg, const ts::Snapshot& snap, float dt_ms, uint64_t now_ms, const std::string& notice);

@@ -3,9 +3,11 @@
 	<title>YapNotifier HUD</title>
 	<link type="text/rcss" href="hud.rcss"/>
 </head>
-<body data-model="hud" data-style-font-size="font_size" data-style-color="text_color" data-class-shadow="shadow" data-class-outline="outline">
-	<div id="roster" class="block" data-if="show_roster" data-style-opacity="roster_opacity" data-class-panel="panel"
-	     data-style-background-color="panel_color" data-style-border-radius="radius">
+<body data-model="hud" data-style-font-size="font_size" data-style-color="text_color" data-class-shadow="shadow" data-class-outline="outline"
+      data-class-edit="edit" data-class-dark="dark">
+	<div id="roster" class="block" data-if="show_roster || edit" data-style-opacity="roster_opacity" data-class-panel="panel"
+	     data-style-background-color="panel_color" data-style-border-radius="radius" data-style-border-color="edit_border">
+		<div class="grip" data-if="edit" data-style-border-color="edit_border"><span class="pill">Roster</span><span class="hint" data-style-color="edit_muted">Drag to move</span></div>
 		<div class="title" data-if="title != ''">
 			<svg class="icon" data-if="title_icon != ''" data-attr-src="title_icon" data-style-image-color="title_icon_color"
 			     data-style-width="icon_size" data-style-height="icon_size"/>
@@ -23,7 +25,9 @@
 		<div class="row legacy" data-if="legacy" data-style-margin-top="row_gap">TS3 plugin outdated: install YapNotifier.ts3_plugin</div>
 	</div>
 
-	<div id="toasts" class="block" data-style-width="notif_width" data-class-accent="accent_bar" data-style-color="notif_text">
+	<div id="toasts" class="block" data-style-width="notif_width" data-class-accent="accent_bar" data-style-color="notif_text"
+	     data-style-background-color="edit_bg" data-style-border-color="edit_border">
+		<div class="grip" data-if="edit" data-style-border-color="edit_border"><span class="pill">Notifications</span><span class="hint" data-style-color="edit_muted">Drag to move</span></div>
 		<div class="toast" data-for="t : toasts" data-style-opacity="t.opacity" data-style-background-color="notif_bg"
 		     data-style-border-color="notif_border">
 			<div class="bar" data-style-background-color="t.color"/>
@@ -31,8 +35,9 @@
 		</div>
 	</div>
 
-	<div id="chat" class="block" data-if="chat.size > 0" data-style-width="chat_width" data-style-background-color="chat_bg"
+	<div id="chat" class="block" data-if="chat.size > 0 || edit" data-style-width="chat_width" data-style-background-color="chat_bg"
 	     data-style-border-color="chat_border" data-style-color="chat_text">
+		<div class="grip" data-if="edit" data-style-border-color="chat_border"><span class="pill">Chat</span><span class="hint" data-style-color="edit_muted">Drag to move</span></div>
 		<div class="line" data-for="l : chat"><span class="prefix" data-style-color="chat_sender_color">{{l.prefix}}</span>{{l.body}}</div>
 	</div>
 

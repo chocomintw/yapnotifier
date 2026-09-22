@@ -118,7 +118,8 @@ input.checkbox {
 	cursor: pointer;
 }
 input.checkbox:hover { border-color: #807d72; }
-input.checkbox:checked { background-color: #26251e; border-color: #26251e; }
+/* checked: the surface stays, a primary-coloured tick sits in it (svg decorator tinted by image-color) */
+input.checkbox:checked { border-color: #f54e00; decorator: svg(icons/check.svg); image-color: #f54e00; }
 
 /* range slider */
 input.range {
@@ -240,7 +241,7 @@ scrollbarvertical sliderarrowdec, scrollbarvertical sliderarrowinc { width: 0; h
 .dark button.ghost:hover { color: #f7f7f4; }
 .dark input.checkbox { background-color: #26251e; border-color: #4c4a41; }
 .dark input.checkbox:hover { border-color: #807d72; }
-.dark input.checkbox:checked { background-color: #f7f7f4; border-color: #f7f7f4; }
+.dark input.checkbox:checked { background-color: #26251e; border-color: #f54e00; }
 .dark input.range slidertrack { background-color: #3a3830; }
 .dark input.range sliderbar { background-color: #f7f7f4; }
 .dark input.range sliderbar:hover, .dark input.range sliderbar:active { background-color: #b9b6ac; }

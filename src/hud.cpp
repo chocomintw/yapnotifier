@@ -53,11 +53,46 @@ struct View {
     std::string chat_sender_color = "#FFFFFFFF";
     std::vector<ChatView> chat;
     std::string notice;
+    // edit mode: every block becomes a DESIGN.md card (surface, hairline, muted hint)
+    bool edit = false, dark = false;
+    std::string edit_bg = "transparent", edit_border = "transparent", edit_muted = "#807D72FF";
 };
 
 View g_view;
 Rml::DataModelHandle g_model;
 Rml::ElementDocument* g_doc = nullptr;
+Config* g_edit = nullptr;  // set while the menu is open: drags write into it
+
+// Edit mode drags: the delta from dragstart, in dp, moves the block's offset in the config.
+struct Block {
+    const char* id;
+    Anchor Config::*anchor;
+    float Config::*x, Config::*y;
+};
+constexpr Block kBlocks[] = {{"roster", &Config::anchor, &Config::pos_x, &Config::pos_y},
+                             {"toasts", &Config::notif_anchor, &Config::notif_x, &Config::notif_y},
+                             {"chat", &Config::chat_anchor, &Config::chat_x, &Config::chat_y}};
+struct DragListener : Rml::EventListener {
+    Rml::Vector2f start, mouse;
+    void ProcessEvent(Rml::Event& ev) override {
+        if (!g_edit) return;
+        const Block* b = nullptr;
+        for (const Block& k : kBlocks)
+            if (ev.GetCurrentElement()->GetId() == k.id) b = &k;
+        if (!b) return;
+        const Rml::Vector2f m(ev.GetParameter("mouse_x", 0.f), ev.GetParameter("mouse_y", 0.f));
+        if (ev.GetId() == Rml::EventId::Dragstart) {
+            mouse = m;
+            start = {g_edit->*b->x, g_edit->*b->y};
+            return;
+        }
+        const Rml::Vector2f d = (m - mouse) / ev.GetCurrentElement()->GetContext()->GetDensityIndependentPixelRatio();
+        float x = start.x, y = start.y;
+        roster::drag_offset(g_edit->*b->anchor, d.x, d.y, x, y);
+        g_edit->*b->x = x;
+        g_edit->*b->y = y;
+    }
+} g_drag;
 
 std::string dp(float v) { return std::to_string(static_cast<int>(std::lround(v))) + "dp"; }
 std::string hex(Color c, float alpha = 1.f) { return config::format_color(icons::with_alpha(c, alpha)); }
@@ -317,6 +352,11 @@ bool init(Rml::Context& ctx) {
     m.Bind("chat_sender_color", &v.chat_sender_color);
     m.Bind("chat", &v.chat);
     m.Bind("notice", &v.notice);
+    m.Bind("edit", &v.edit);
+    m.Bind("dark", &v.dark);
+    m.Bind("edit_bg", &v.edit_bg);
+    m.Bind("edit_border", &v.edit_border);
+    m.Bind("edit_muted", &v.edit_muted);
     g_model = m.GetModelHandle();
 
     g_doc = ctx.LoadDocument("hud.rml");
@@ -325,8 +365,15 @@ bool init(Rml::Context& ctx) {
         return false;
     }
     g_doc->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
+    for (const Block& b : kBlocks) {
+        Rml::Element* el = g_doc->GetElementById(b.id);
+        el->AddEventListener(Rml::EventId::Dragstart, &g_drag);
+        el->AddEventListener(Rml::EventId::Drag, &g_drag);
+    }
     return true;
 }
+
+void edit(Config* cfg) { g_edit = cfg; }
 
 void sync(State& st, const Config& cfg, const ts::Snapshot& snap, float dt_ms, uint64_t now_ms, const std::string& notice) {
     st.env.tick(snap.users, dt_ms, cfg);
@@ -336,15 +383,39 @@ void sync(State& st, const Config& cfg, const ts::Snapshot& snap, float dt_ms, u
     st.idle_ms = busy ? 0.f : st.idle_ms + dt_ms;
     const float target = cfg.fade_when_idle && st.idle_ms > static_cast<float>(cfg.idle_after_ms) ? 1.f : 0.f;
     st.idle_fade += (target - st.idle_fade) * std::min(1.f, dt_ms / 400.f);
-    const float master = cfg.master_opacity * (1.f - st.idle_fade * (1.f - cfg.idle_opacity));
+    // No idle fade while placing the blocks: every card stays fully visible.
+    const float master = g_edit ? 1.f : cfg.master_opacity * (1.f - st.idle_fade * (1.f - cfg.idle_opacity));
 
     View& v = g_view;
     v.font_size = dp(cfg.font_size);
     v.icon_size = dp(cfg.icon_size);
     v.row_gap = dp(cfg.row_spacing);
     v.max_name = dp(cfg.max_name_width);
-    v.text_color = hex(cfg.text_color);
-    v.text_secondary = hex(cfg.text_secondary);
+    // Edit mode: the roster becomes a theme card (light = white / ink, dark = its inversion),
+    // so unless the user has their own panel its text is retinted to the card's ink - the
+    // configured colours would otherwise vanish on a matching surface.
+    v.edit = g_edit != nullptr;
+    v.dark = cfg.dark_theme;
+    Config themed;
+    const Config* rc = &cfg;
+    if (v.edit) {
+        // Every block gets the theme card, whatever panel / background colours the user set:
+        // the three must look alike while being placed. Custom colours return on close.
+        const bool dark = cfg.dark_theme;
+        std::string ink;
+        card_colors(cfg, 0, v.edit_bg, v.edit_border, ink);
+        const Color muted = dark ? rgba(0xa0, 0x9c, 0x92) : rgba(0x80, 0x7d, 0x72);
+        v.edit_muted = hex(muted);
+        themed = cfg;
+        themed.text_color = themed.title_color = dark ? rgba(0xf7, 0xf7, 0xf4) : rgba(0x26, 0x25, 0x1e);
+        themed.text_secondary = muted;
+        themed.chat_background = themed.notif_background = 0;
+        rc = &themed;
+    } else {
+        v.edit_bg = v.edit_border = "transparent";
+    }
+    v.text_color = hex(rc->text_color);
+    v.text_secondary = hex(rc->text_secondary);
     v.shadow = cfg.text_shadow && !cfg.text_outline;
     v.outline = cfg.text_outline;
     v.panel = cfg.show_panel;
@@ -353,12 +424,16 @@ void sync(State& st, const Config& cfg, const ts::Snapshot& snap, float dt_ms, u
     v.accent_bar = cfg.notif_accent_bar;
     v.notif_width = dp(cfg.notif_width);
     v.chat_width = dp(cfg.chat_width);
-    card_colors(cfg, cfg.chat_background, v.chat_bg, v.chat_border, v.chat_text);  // master goes on #chat's opacity
+    card_colors(cfg, rc->chat_background, v.chat_bg, v.chat_border, v.chat_text);  // master goes on #chat's opacity
     v.chat_sender_color = hex(cfg.chat_sender_color);
     v.notice = notice;
-    sync_roster(v, st, cfg, snap, master, static_cast<double>(now_ms) / 1000.0);
-    sync_toasts(v, st, cfg, master);
-    sync_chat(v, st, cfg, now_ms);
+    if (v.edit) {
+        v.panel_color = v.edit_bg;
+        v.radius = "12dp";
+    }
+    sync_roster(v, st, *rc, snap, master, static_cast<double>(now_ms) / 1000.0);
+    sync_toasts(v, st, *rc, master);
+    sync_chat(v, st, *rc, now_ms);
 
     place(g_doc->GetElementById("roster"), cfg.anchor, cfg.pos_x, cfg.pos_y);
     place(g_doc->GetElementById("toasts"), cfg.notif_anchor, cfg.notif_x, cfg.notif_y);

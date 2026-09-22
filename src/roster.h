@@ -52,4 +52,8 @@ Color lerp(Color a, Color b, float t);
 // off the middle, so it is limited to +-(extent - size) / 2.
 float clamp_offset(float offset, float size, float extent, bool centred);
 
+// Turns a mouse drag of (dx, dy) into the offset change for a block pinned at `a`: right /
+// bottom anchors measure from the far edge, so their offset grows as the mouse moves back.
+void drag_offset(Anchor a, float dx, float dy, float& x, float& y);
+
 }  // namespace yap::roster
