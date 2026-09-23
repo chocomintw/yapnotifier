@@ -1,6 +1,6 @@
 # YapNotifier
 
-A TeamSpeak 3 overlay for FiveM. Shows who is in your channel, who is talking, muted or away, plus join/leave/whisper notifications and a chat feed — drawn in a transparent window on top of the game, with no game hooks.
+A TeamSpeak 3 overlay for FiveM. Shows who is in your channel, who is talking, muted or away, plus join/leave/whisper notifications and a chat feed, drawn in a transparent window on top of the game with no game hooks.
 
 Two parts, one release:
 

@@ -283,18 +283,18 @@ components:
 
 ## Overview
 
-Cursor's marketing site reads as a quietly-confident developer brand that believes in editorial calm over IDE-darkness. The base canvas is **warm cream** (`{colors.canvas}` — #f7f7f4) holding warm near-black ink (`{colors.ink}` — #26251e) for body and display alike. The single brand voltage is **Cursor Orange** (`{colors.primary}` — #f54e00) reserved for primary CTAs and the wordmark — used scarcely.
+Cursor's marketing site reads as a quietly confident developer brand that believes in editorial calm over IDE-darkness. The base canvas is **warm cream** (`{colors.canvas}` — #f7f7f4) holding warm near-black ink (`{colors.ink}` — #26251e) for body and display alike. The single brand voltage is **Cursor Orange** (`{colors.primary}` — #f54e00) reserved for primary CTAs and the wordmark, used scarcely.
 
-Type runs **CursorGothic** as the single sans family. Display sits at weight 400 with negative letter-spacing — a magazine-editorial voice rather than tech-bombastic. JetBrains Mono carries every code surface (and code surfaces are roughly half the page).
+Type runs **CursorGothic** as the single sans family. Display sits at weight 400 with negative letter-spacing: a magazine-editorial voice rather than tech-bombastic. JetBrains Mono carries every code surface (and code surfaces are roughly half the page).
 
-The brand's strongest visual signature is the **AI-timeline pill palette**: five pastel pills (peach `{colors.timeline-thinking}`, mint `{colors.timeline-grep}`, blue `{colors.timeline-read}`, lavender `{colors.timeline-edit}`, gold `{colors.timeline-done}`) marking AI-action stages inside in-product timeline visualizations. Used only in product UI — never as system action colors.
+The brand's strongest visual signature is the **AI-timeline pill palette**: five pastel pills (peach `{colors.timeline-thinking}`, mint `{colors.timeline-grep}`, blue `{colors.timeline-read}`, lavender `{colors.timeline-edit}`, gold `{colors.timeline-done}`) marking AI-action stages inside in-product timeline visualizations. Used only in product UI, never as system action colors.
 
 **Key Characteristics:**
 - Warm cream canvas, not white. Ink is warm (#26251e), not pure black.
 - Single CTA color: `{colors.primary}` (Cursor Orange #f54e00). Used scarcely.
-- Display weight stays at 400 — never bold. Magazine voice.
+- Display weight stays at 400, never bold. Magazine voice.
 - AI timeline pastels: 5 dedicated tokens for in-product agent action stages.
-- Compact 8px CTA radius — developer dialect.
+- Compact 8px CTA radius: developer dialect.
 - Hairline-only depth; no drop shadows.
 - 80px section rhythm.
 
@@ -307,7 +307,7 @@ The brand's strongest visual signature is the **AI-timeline pill palette**: five
 ### Surface
 - **Canvas** (`{colors.canvas}` — #f7f7f4): Warm cream page floor.
 - **Canvas Soft** (`{colors.canvas-soft}` — #fafaf7): IDE-pane background inside mockups.
-- **Surface Card** (`{colors.surface-card}` — #ffffff): Pure white card surface — slight contrast against the cream canvas.
+- **Surface Card** (`{colors.surface-card}` — #ffffff): Pure white card surface, slight contrast against the cream canvas.
 - **Surface Strong** (`{colors.surface-strong}` — #e6e5e0): Badges, tag pills.
 
 ### Hairlines
@@ -380,7 +380,7 @@ CursorGothic is licensed. Open-source substitute: **Inter** at weight 400 with l
 - Footer: 5-column at desktop.
 
 ### Whitespace Philosophy
-Generous editorial pacing — closer to a print magazine than a tech site. The cream canvas has plenty of breathing room; cards within bands sit close (16-24px gap).
+Generous editorial pacing, closer to a print magazine than a tech site. The cream canvas has plenty of breathing room; cards within bands sit close (16-24px gap).
 
 ## Elevation & Depth
 
@@ -487,9 +487,9 @@ The system uses **hairline-only depth**. No drop shadows, no elevation tiers. Ca
 ### Do
 - Reserve `{colors.primary}` (Cursor Orange) for primary CTAs and brand wordmark.
 - Keep display weight at 400. The editorial voice depends on this.
-- Use the cream `{colors.canvas}` page floor — never pure white.
+- Use the cream `{colors.canvas}` page floor, never pure white.
 - Render every code surface (inline, blocks, IDE panes) in JetBrains Mono.
-- Use timeline pastels only inside in-product agent visualizations — never as system action colors.
+- Use timeline pastels only inside in-product agent visualizations, never as system action colors.
 
 ### Don't
 - Don't introduce a secondary brand action color. Cursor Orange is the only one.
@@ -510,8 +510,8 @@ The system uses **hairline-only depth**. No drop shadows, no elevation tiers. Ca
 | Wide | > 1280px | Content caps at 1200px. |
 
 ### Touch Targets
-- Primary CTA at 40px height — at WCAG AA, padded for AAA.
-- Download CTA at 44px — at AAA.
+- Primary CTA at 40px height: WCAG AA, padded for AAA.
+- Download CTA at 44px: AAA.
 
 ### Collapsing Strategy
 - Top nav switches to hamburger below 768px.
@@ -523,7 +523,7 @@ The system uses **hairline-only depth**. No drop shadows, no elevation tiers. Ca
 1. Focus on a single component at a time.
 2. CTAs default to `{rounded.md}` (8px). Cards use `{rounded.lg}` (12px).
 3. Variants live as separate entries inside `components:`.
-4. Use `{token.refs}` everywhere — never inline hex.
+4. Use `{token.refs}` everywhere, never inline hex.
 5. Hover state never documented.
 6. CursorGothic 400 for display, 400/500/600 for body. JetBrains Mono on every code surface.
 7. Cursor Orange stays scarce.

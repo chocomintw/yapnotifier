@@ -65,5 +65,5 @@ reader (`ts3plugin/sqlite_read.cpp`, `ts_contacts.cpp`, MIT).
 
 Notification sounds, list-reorder animation, glow/border-sweep speaking modes,
 avatar initials, per-executable profile mapping, font weight synthesis, name
-overflow modes other than ellipsis, diagnostics counters — dead or N/A in the
+overflow modes other than ellipsis, diagnostics counters: dead or N/A in the
 reference.
