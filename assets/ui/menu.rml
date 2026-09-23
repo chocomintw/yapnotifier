@@ -9,6 +9,11 @@
 
 <tab>Status</tab>
 <panel>
+	<div class="ind" data-if="whats_new.size > 0">
+		<h2>What's new in {{version}}</h2>
+		<p class="row" data-for="line : whats_new">{{line}}</p>
+		<button data-event-click="dismiss_news()">Got it</button>
+	</div>
 	<p class="warn" data-if="!alive">TS3 plugin: not connected (enable the YapNotifier plugin in TeamSpeak)</p>
 	<p class="warn" data-if="alive && legacy">TS3 plugin is outdated: install YapNotifier.ts3_plugin from the release</p>
 	<p class="dim" data-if="alive && !legacy">TS3 plugin: connected</p>
@@ -17,12 +22,12 @@
 	<p class="dim" data-if="conn == 1">Connecting...</p>
 	<p class="dim" data-if="conn == 0">Not connected to a server</p>
 	<hr/>
-	<div class="row"><input type="checkbox" data-checked="hud_hidden"/> Hide overlay ({{hide_key_name}}; hide_key in the ini)</div>
+	<div class="row"><input type="checkbox" data-checked="hud_hidden"/> Hide overlay ({{hide_key_name}})</div>
 	<div class="row"><input type="checkbox" data-checked="demo"/> Demo mode (fake roster + events, no TeamSpeak needed)</div>
 	<div class="row"><span class="label">UDP port</span><input type="text" class="num" data-value="port"/></div>
 	<div class="row"><input type="checkbox" data-checked="auto_update"/> Auto-update on launch</div>
 	<div class="row"><input type="checkbox" data-checked="dark_theme"/> Dark theme (menu + notifications)</div>
-	<p class="dim">{{key_name}} toggles this menu (menu_key in the ini)</p>
+	<p class="dim">{{key_name}} toggles this menu (change it on the Keys tab)</p>
 </panel>
 
 <tab>Layout</tab>
@@ -180,6 +185,14 @@
 	<hr/>
 	<div class="row"><span class="label">New profile name</span><input type="text" data-value="new_profile"/><button data-event-click="profile_save_as()">Save as</button></div>
 	<p class="dim" data-if="status != ''">{{status}}</p>
+</panel>
+
+<tab>Keys</tab>
+<panel>
+	<div class="row"><span class="label">Open this menu</span><button data-event-click="bind_key('menu')">{{capture == 'menu' ? 'Press a key...' : key_name}}</button></div>
+	<div class="row"><span class="label">Hide overlay</span><button data-event-click="bind_key('hide')">{{capture == 'hide' ? 'Press a key...' : hide_key_name}}</button></div>
+	<p class="warn" data-if="key_error != ''">{{key_error}}: press a different key</p>
+	<p class="dim">Click a key, then press the new one (Esc cancels). Applies at once; Save keeps it.</p>
 </panel>
 
 </tabset>

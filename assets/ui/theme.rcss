@@ -126,7 +126,7 @@ input.range {
 	display: inline-block;
 	width: 220dp;
 	height: 18dp;
-	vertical-align: -4dp;
+	vertical-align: middle;  /* no text inside: baseline alignment would stand it on the baseline, poking into the row above */
 	cursor: pointer;
 }
 input.range slidertrack {
@@ -136,7 +136,7 @@ input.range slidertrack {
 	background-color: #e6e5e0;
 }
 input.range sliderbar {
-	margin-top: -6dp;
+	margin-top: 1dp;  /* from the slider's top, not the track's: centres 16dp on the track at 7..11dp */
 	width: 12dp;
 	height: 16dp;
 	border-radius: 4dp;
@@ -204,8 +204,7 @@ colorpicker {
 	height: 18dp;
 	padding-left: 32dp;
 	box-sizing: border-box;
-	vertical-align: -4dp;
-	line-height: 18dp;
+	line-height: 18dp;  /* baseline = the hex text's, so it lines up with the row's label */
 	font-size: 12dp;
 	color: #807d72;
 	cursor: pointer;

@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
 
 // Self-updater. Checks the latest GitHub release once per launch; if newer,
 // downloads YapNotifier.asi, verifies it against GitHub's SHA-256 digest, and
@@ -19,6 +20,8 @@ struct Release {
 // Pure helpers, exposed for tests.
 bool parse_release(std::string_view json, Release& out);
 bool is_newer(std::string_view tag, std::string_view current);  // "v0.2.0" > "0.1.0"
+// Lines of CHANGELOG.md's "## <version>" section (blank lines dropped, "- " bullets stripped).
+std::vector<std::string> changelog_section(std::string_view md, std::string_view version);
 
 // Call at startup: removes the previous version left by a swap and sets the
 // "updated" notice if one was found.

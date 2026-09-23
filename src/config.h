@@ -72,6 +72,7 @@ struct Config {
     int hide_key = 0x24;  // VK_HOME, toggles hud_hidden
     bool hud_hidden = false;  // HUD not drawn; the menu still opens
     bool dark_theme = false;  // menu + toasts palette; light follows DESIGN.md, dark is its ink inversion
+    std::string seen_version;  // last version whose "What's new" was dismissed in the menu
     bool demo = false;    // not saved
 
     // general look

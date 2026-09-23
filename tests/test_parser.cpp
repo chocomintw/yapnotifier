@@ -269,6 +269,20 @@ int main() {
     // not a release payload
     CHECK(!parse_release("{\"message\":\"Not Found\"}", rel));
 
+    // --- updater: changelog section for the in-menu "What's new" -----------------
+    using yap::update::changelog_section;
+    const char* md =
+        "# Changelog\r\n\r\n## Unreleased\r\n\r\n- next\r\n\r\n"
+        "## 0.3.10 - 2026-09-23\r\n\r\n- wrong one\r\n\r\n"
+        "## 0.3.1 - 2026-09-22\r\n\r\nIntro line.\r\n\r\n- first\r\n- second\r\n\r\n"
+        "## 0.3.0\n- older\n";
+    auto sec = changelog_section(md, "0.3.1");
+    CHECK(sec.size() == 3 && sec[0] == "Intro line." && sec[1] == "first" && sec[2] == "second");
+    sec = changelog_section(md, "0.3.0");  // last section, bare heading, LF
+    CHECK(sec.size() == 1 && sec[0] == "older");
+    CHECK(changelog_section(md, "0.3").empty());  // prefix of 0.3.0/0.3.1 must not match
+    CHECK(changelog_section(md, "9.9.9").empty());
+
     std::puts("test_parser: ok");
     return 0;
 }

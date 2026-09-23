@@ -27,6 +27,9 @@ FX_ASI_BUILD 3889 BEGIN "\0" END
 // the updater ships stays self-contained. Loaded in overlay.cpp via FindResource.
 YAP_FONT RCDATA "assets/InterVariable.ttf"
 
+// This version's section is shown once as "What's new" in the menu (src/menu.cpp).
+YAP_CHANGELOG RCDATA "CHANGELOG.md"
+
 // RmlUi documents, styles and icons (assets/ui), served by src/ui_files.cpp: resource name = "UI_" +
 // path upper-cased with every non-alphanumeric turned into "_". Add a line when a file is added.
 UI_HUD_RCSS RCDATA "assets/ui/hud.rcss"

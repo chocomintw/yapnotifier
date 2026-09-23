@@ -9,6 +9,7 @@
 
 #include "log.h"
 #include "teamspeak.h"
+#include "ui_files.h"
 #include "update.h"
 #include "version.h"
 
@@ -45,6 +46,9 @@ struct Live {
     std::vector<UserRow> users;
     std::vector<ChannelRow> channels;
     std::vector<std::string> profiles;
+    std::vector<std::string> whats_new;  // this version's CHANGELOG.md lines until dismissed
+    std::string capture;                 // Keys tab: "menu" / "hide" while waiting for a key, else ""
+    std::string key_error;               // Keys tab: why the last pressed key was refused
     std::string selected, new_profile, status, version = "YapNotifier v" YAP_VERSION;
     std::vector<std::string> ind_names, notif_names;
     std::vector<std::string> anchor_names{"Top left", "Top centre", "Top right", "Middle left", "Centre", "Middle right", "Bottom left", "Bottom centre", "Bottom right"};
@@ -53,6 +57,7 @@ struct Live {
 };
 
 Live g_live;
+Host* g_host = nullptr;
 Rml::ElementDocument* g_doc = nullptr;
 Rml::DataModelHandle g_model;
 
@@ -132,6 +137,7 @@ void refresh(Host& h) {
 }  // namespace
 
 bool init(Host& h, Rml::Context& ctx) {
+    g_host = &h;
     Config& c = h.cfg;
     Rml::DataModelConstructor m = ctx.CreateDataModel("cfg");
     if (!m) {
@@ -227,8 +233,14 @@ bool init(Host& h, Rml::Context& ctx) {
     L(alive); L(legacy); L(channel_customised); L(conn); L(server); L(channel); L(parent); L(count);
     L(notice); L(key_name); L(hide_key_name); L(channel_id); L(people); L(users); L(channels); L(profiles);
     L(selected); L(new_profile); L(status); L(version); L(ind_names); L(notif_names);
-    L(anchor_names); L(sort_names); L(icon_names);
+    L(anchor_names); L(sort_names); L(icon_names); L(whats_new); L(capture); L(key_error);
 #undef L
+    l.whats_new.clear();
+    if (h.cfg.seen_version != YAP_VERSION) {
+        auto md = ui_files::resource(L"YAP_CHANGELOG");
+        l.whats_new = update::changelog_section(
+            {reinterpret_cast<const char*>(md.data()), md.size()}, YAP_VERSION);
+    }
 
     // --- buttons ---------------------------------------------------------------------------
     m.BindEventCallback("close", [&h](Rml::DataModelHandle, Rml::Event&, Args) { h.open = false; });
@@ -236,8 +248,21 @@ bool init(Host& h, Rml::Context& ctx) {
     m.BindEventCallback("reload", [&h](Rml::DataModelHandle, Rml::Event&, Args) { reload(h); });
     m.BindEventCallback("reset", [&h](Rml::DataModelHandle, Rml::Event&, Args) {
         const bool demo = h.cfg.demo;
+        std::string seen = std::move(h.cfg.seen_version);
         h.cfg = Config{};
         h.cfg.demo = demo;
+        h.cfg.seen_version = std::move(seen);
+    });
+    m.BindEventCallback("bind_key", [](Rml::DataModelHandle, Rml::Event&, Args a) {
+        if (a.empty()) return;
+        g_live.capture = a[0].Get<std::string>();
+        g_live.key_error.clear();
+    });
+    // Written on its own so dismissing doesn't also save unsaved edits.
+    m.BindEventCallback("dismiss_news", [&h](Rml::DataModelHandle, Rml::Event&, Args) {
+        g_live.whats_new.clear();
+        h.cfg.seen_version = YAP_VERSION;
+        WritePrivateProfileStringW(L"YapNotifier", L"seen_version", L"" YAP_VERSION, h.ini.c_str());
     });
     m.BindEventCallback("select_user", [&h](Rml::DataModelHandle, Rml::Event&, Args a) {
         if (a.empty()) return;
@@ -290,6 +315,8 @@ bool init(Host& h, Rml::Context& ctx) {
 }
 
 void show(bool open) {
+    g_live.capture.clear();
+    g_live.key_error.clear();
     if (!g_doc) return;
     if (open) g_doc->Show();
     else g_doc->Hide();
@@ -299,6 +326,26 @@ void sync(Host& h) {
     refresh(h);
     g_model.DirtyAllVariables();
     if (g_doc) g_doc->SetClass("dark", h.cfg.dark_theme);  // theme.rcss switches palettes on body.dark
+}
+
+bool capturing() { return !g_live.capture.empty(); }
+
+// One key per action: a key the other action already uses is refused and capture keeps
+// waiting for another. Esc cancels.
+void capture_key(int vk) {
+    std::string& which = g_live.capture;
+    g_live.key_error.clear();
+    if (g_host && vk != VK_ESCAPE) {
+        Config& c = g_host->cfg;
+        const bool menu = which == "menu";
+        if (vk == (menu ? c.hide_key : c.menu_key)) {
+            g_live.key_error = key_name(vk) + " is already used for " + (menu ? "Hide overlay" : "Open this menu");
+            return;
+        }
+        (menu ? c.menu_key : c.hide_key) = vk;
+        log::info("menu: {} key -> {}", which, key_name(vk));
+    }
+    which.clear();
 }
 
 }  // namespace yap::menu

@@ -42,7 +42,13 @@ jobs:
           Copy-Item build/Release/YapNotifier.asi, build/YapNotifier.ts3_plugin dist/
           Copy-Item build/Release/YapNotifier.pdb .   # CI artifact only, never released
           $sums = Get-FileHash dist/* -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" }
-          @("## SHA-256", '```', $sums, '```') | Set-Content release-notes.md
+          # Release notes = this version's CHANGELOG.md section (required on tags) + checksums.
+          $v = (Select-String -Path shared/version.h -Pattern '#define YAP_VERSION\s+"([^"]+)"').Matches[0].Groups[1].Value
+          $log = (Get-Content CHANGELOG.md -Raw) -replace "`r", ''
+          $m = [regex]::Match($log, "(?ms)^## $([regex]::Escape($v))\b[^\n]*\n(.*?)(?=^## |\z)")
+          if (-not $m.Success -and $env:GITHUB_REF -like 'refs/tags/v*') { throw "CHANGELOG.md has no '## $v' section" }
+          $changes = if ($m.Success) { @("## What's changed", $m.Groups[1].Value.Trim(), '') } else { @() }
+          @($changes; "## SHA-256", '```', $sums, '```') | Set-Content release-notes.md
           Get-Content release-notes.md
 
       - uses: actions/upload-artifact@v4

@@ -25,4 +25,9 @@ void show(bool open);
 // Refreshes the live facts (connection, roster, profiles) while the menu is open.
 void sync(Host& h);
 
+// Keys tab: while a rebind waits for a key, the overlay's wndproc hands it the key's
+// virtual-key code (on release, so the new hotkey isn't seen held down). Esc cancels.
+bool capturing();
+void capture_key(int vk);
+
 }  // namespace yap::menu

@@ -177,6 +177,27 @@ bool is_newer(std::string_view tag, std::string_view current) {
     return false;
 }
 
+std::vector<std::string> changelog_section(std::string_view md, std::string_view version) {
+    std::vector<std::string> out;
+    bool in = false;
+    while (!md.empty()) {
+        const size_t nl = md.find('\n');
+        std::string_view line = md.substr(0, nl);
+        md = nl == std::string_view::npos ? std::string_view{} : md.substr(nl + 1);
+        if (!line.empty() && line.back() == '\r') line.remove_suffix(1);
+        if (line.starts_with("## ")) {
+            if (in) break;
+            std::string_view rest = line.substr(3);
+            in = rest.starts_with(version) && (rest.size() == version.size() || rest[version.size()] == ' ');
+            continue;
+        }
+        if (!in || line.find_first_not_of(' ') == std::string_view::npos) continue;
+        if (line.starts_with("- ")) line.remove_prefix(2);
+        out.emplace_back(line);
+    }
+    return out;
+}
+
 void cleanup_previous(const std::filesystem::path& self) {
     const std::wstring old = self.wstring() + L".old";
     if (GetFileAttributesW(old.c_str()) == INVALID_FILE_ATTRIBUTES) return;

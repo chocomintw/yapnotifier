@@ -35,12 +35,15 @@ DWORD WINAPI init_thread(LPVOID) {
     yap::update::check_and_install(self, cfg.auto_update);
 
     // Poll the menu and hide-HUD hotkeys. GetAsyncKeyState reads global state, so only act on it while
-    // this process (the game or our own overlay window) is in the foreground. There is
-    // deliberately no eject: the plugin lives for the whole process.
+    // this process (the game or our own overlay window) is in the foreground. The keys come
+    // live from the overlay (rebindable in the menu). There is deliberately no eject: the
+    // plugin lives for the whole process.
+    auto down = [](int vk) { return vk && (GetAsyncKeyState(vk) & 0x8000) != 0; };
     bool menu_was_down = false, hide_was_down = false;
     for (;;) {
-        bool menu_down = (GetAsyncKeyState(cfg.menu_key) & 0x8000) != 0;
-        bool hide_down = (GetAsyncKeyState(cfg.hide_key) & 0x8000) != 0;
+        const auto keys = yap::overlay::hotkeys();
+        bool menu_down = down(keys.menu);
+        bool hide_down = down(keys.hide);
         DWORD fg_pid = 0;
         GetWindowThreadProcessId(GetForegroundWindow(), &fg_pid);
         const bool ours = fg_pid == GetCurrentProcessId();

@@ -65,6 +65,9 @@ std::thread g_thread;
 std::atomic<bool> g_stop{false};
 std::atomic<bool> g_ready{false};
 std::atomic<bool> g_menu_open{false};
+// The hotkeys the init thread polls, published from g_cfg (UI thread) every frame; 0 while
+// the Keys tab waits for a key so pressing the old hotkey rebinds instead of toggling.
+std::atomic<int> g_menu_key{0}, g_hide_key{0};
 std::atomic<bool> g_visible{true};  // game in foreground: window shown + rendered
 
 // --- camera lock (borrowed from vlights) -------------------------------------
@@ -284,6 +287,14 @@ LRESULT CALLBACK wndproc(HWND h, UINT m, WPARAM w, LPARAM l) {
             PostQuitMessage(0);
             return 0;
     }
+    // Keys tab rebind: take the raw virtual-key code (RmlUi's key events don't carry it).
+    if (menu::capturing()) {
+        if (m == WM_KEYDOWN || m == WM_SYSKEYDOWN) return 0;
+        if (m == WM_KEYUP || m == WM_SYSKEYUP) {
+            menu::capture_key(static_cast<int>(w));
+            return 0;
+        }
+    }
     // Input only reaches us while the menu is open (closed, the window is click-through).
     // The menu gets everything first; the HUD (draggable blocks in edit mode) gets the mouse
     // presses the menu left alone, and every move/release so a drag let go over the menu ends.
@@ -383,6 +394,9 @@ void render_frame() {
     g_last_frame = now;
 
     g_rml->SetDensityIndependentPixelRatio(g_cfg.scale);  // every RCSS size is in dp
+    const bool capturing = menu::capturing();
+    g_menu_key = capturing ? 0 : g_cfg.menu_key;
+    g_hide_key = capturing ? 0 : g_cfg.hide_key;
     sync_hud(dt_ms, now);
     if (g_menu_open.load()) {
         menu::sync(*g_menu_host);
@@ -521,6 +535,8 @@ namespace yap::overlay {
 void set_config(const Config& cfg, std::wstring ini_path) {
     g_cfg = cfg;
     g_ini = std::move(ini_path);
+    g_menu_key = cfg.menu_key;
+    g_hide_key = cfg.hide_key;
 }
 
 void start() {
@@ -537,6 +553,8 @@ void stop() {
 void toggle_menu() {
     if (g_ready.load() && g_hwnd) PostMessageW(g_hwnd, WM_YAP_TOGGLE, 0, 0);
 }
+
+Hotkeys hotkeys() { return {g_menu_key.load(), g_hide_key.load()}; }
 
 void toggle_hud() {
     if (g_ready.load() && g_hwnd) PostMessageW(g_hwnd, WM_YAP_HIDE, 0, 0);
