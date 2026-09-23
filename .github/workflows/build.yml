@@ -15,6 +15,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Avoid AI Writing Gate
+        uses: conorbronsdon/avoid-ai-writing@v3.36.0
+
       - name: Check package.ini version matches version.h
         shell: pwsh
         run: |
