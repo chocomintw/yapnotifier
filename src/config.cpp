@@ -129,6 +129,8 @@ void visit(Config& c, const F& f) {
     f(L"port", c.port);
     f(L"auto_update", c.auto_update);
     f(L"menu_key", c.menu_key);
+    f(L"hide_key", c.hide_key);
+    f(L"hud_hidden", c.hud_hidden);
     f(L"dark_theme", c.dark_theme);
 
     f(L"show_when_disconnected", c.show_when_disconnected);

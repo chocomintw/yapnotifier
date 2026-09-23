@@ -17,6 +17,7 @@
 	<p class="dim" data-if="conn == 1">Connecting...</p>
 	<p class="dim" data-if="conn == 0">Not connected to a server</p>
 	<hr/>
+	<div class="row"><input type="checkbox" data-checked="hud_hidden"/> Hide overlay ({{hide_key_name}}; hide_key in the ini)</div>
 	<div class="row"><input type="checkbox" data-checked="demo"/> Demo mode (fake roster + events, no TeamSpeak needed)</div>
 	<div class="row"><span class="label">UDP port</span><input type="text" class="num" data-value="port"/></div>
 	<div class="row"><input type="checkbox" data-checked="auto_update"/> Auto-update on launch</div>

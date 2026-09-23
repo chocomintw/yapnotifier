@@ -21,6 +21,7 @@ The overlay checks GitHub for a new version on every launch and installs it for 
 ## Use
 
 - **INSERT** opens the config menu (rebindable via `menu_key` in the INI, a Windows virtual-key code). While it is open the game's mouse is released; close it with INSERT again or the menu's ×.
+- **HOME** hides/shows the overlay (rebindable via `hide_key`; also a checkbox on the Status tab). Hidden is remembered when you Save.
 - **Status tab → Demo mode** renders a fake roster and scripted events so you can lay everything out without TeamSpeak running.
 - Tabs: Status, Layout (anchor, offsets, scale, font), Roster (visibility, sorting, colours), Indicators (per-state icons/colours), Notifications, Chat, Users (per-person overrides), Channel (per-channel overrides), Profiles (save/load whole configs).
 

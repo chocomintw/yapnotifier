@@ -69,6 +69,8 @@ struct Config {
     int port = 25640;  // UDP port the TS3 plugin sends to (yap::proto::kPort)
     bool auto_update = true;
     int menu_key = 0x2D;  // VK_INSERT
+    int hide_key = 0x24;  // VK_HOME, toggles hud_hidden
+    bool hud_hidden = false;  // HUD not drawn; the menu still opens
     bool dark_theme = false;  // menu + toasts palette; light follows DESIGN.md, dark is its ink inversion
     bool demo = false;    // not saved
 

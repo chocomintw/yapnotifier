@@ -40,7 +40,7 @@ struct Person {
 struct Live {
     bool alive = false, legacy = false, channel_customised = false;
     int conn = 0;
-    std::string server, channel, parent, count, notice, key_name, channel_id;
+    std::string server, channel, parent, count, notice, key_name, hide_key_name, channel_id;
     std::vector<Person> people;
     std::vector<UserRow> users;
     std::vector<ChannelRow> channels;
@@ -111,6 +111,7 @@ void refresh(Host& h) {
     l.channel_customised = h.cfg.channels.count(snap->channel_id) != 0;
     l.notice = *update::notice();
     l.key_name = key_name(h.cfg.menu_key);
+    l.hide_key_name = key_name(h.cfg.hide_key);
 
     l.people.clear();
     for (const auto& u : snap->users) l.people.push_back({u.uid, u.nickname, h.cfg.users.count(u.uid) != 0});
@@ -194,7 +195,7 @@ bool init(Host& h, Rml::Context& ctx) {
 
     // --- Config fields: menu.rml binds them by their ini names ----------------------------
 #define B(field) m.Bind(#field, &c.field)
-    B(port); B(auto_update); B(demo); B(dark_theme);
+    B(port); B(auto_update); B(demo); B(dark_theme); B(hud_hidden);
     B(show_when_disconnected); B(master_opacity); B(scale); B(font_file); B(font_size);
     B(text_shadow); B(text_outline); B(text_color); B(text_secondary);
     B(anchor); B(pos_x); B(pos_y); B(show_title); B(show_parent); B(show_count); B(show_server);
@@ -224,7 +225,7 @@ bool init(Host& h, Rml::Context& ctx) {
     for (int i = 0; i < NotifCount; ++i) l.notif_names.push_back(pretty(kNotifNames[i]));
 #define L(field) m.Bind(#field, &l.field)
     L(alive); L(legacy); L(channel_customised); L(conn); L(server); L(channel); L(parent); L(count);
-    L(notice); L(key_name); L(channel_id); L(people); L(users); L(channels); L(profiles);
+    L(notice); L(key_name); L(hide_key_name); L(channel_id); L(people); L(users); L(channels); L(profiles);
     L(selected); L(new_profile); L(status); L(version); L(ind_names); L(notif_names);
     L(anchor_names); L(sort_names); L(icon_names);
 #undef L

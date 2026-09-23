@@ -23,4 +23,7 @@ void stop();
 // Toggle the interactive config menu (from the hotkey poll on another thread).
 void toggle_menu();
 
+// Flip Config::hud_hidden on the UI thread (from the hotkey poll on another thread).
+void toggle_hud();
+
 }  // namespace yap::overlay

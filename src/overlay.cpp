@@ -35,6 +35,7 @@ using namespace yap;
 // hit-tested the never-painted GDI bitmap, so every click fell through; and
 // WS_EX_TRANSPARENT only passes input through when the window is also WS_EX_LAYERED.)
 constexpr UINT WM_YAP_TOGGLE = WM_APP + 1;
+constexpr UINT WM_YAP_HIDE = WM_APP + 2;
 
 Config g_cfg;
 std::wstring g_ini;
@@ -274,6 +275,10 @@ LRESULT CALLBACK wndproc(HWND h, UINT m, WPARAM w, LPARAM l) {
             }
             return 0;
         }
+        case WM_YAP_HIDE:
+            g_cfg.hud_hidden = !g_cfg.hud_hidden;
+            log::info("overlay: HUD {}", g_cfg.hud_hidden ? "hidden" : "shown");
+            return 0;
         case WM_DESTROY:
             restore_game_mouse();
             PostQuitMessage(0);
@@ -286,7 +291,7 @@ LRESULT CALLBACK wndproc(HWND h, UINT m, WPARAM w, LPARAM l) {
         const bool free = RmlWin32::WindowProcedure(g_menu_ctx, g_ime, h, m, w, l);
         const bool mouse = m >= WM_MOUSEFIRST && m <= WM_MOUSELAST;
         const bool release = m == WM_MOUSEMOVE || m == WM_LBUTTONUP || m == WM_RBUTTONUP || m == WM_MBUTTONUP;
-        if (g_rml && mouse && (free || release) && !RmlWin32::WindowProcedure(g_rml, g_ime, h, m, w, l)) return 0;
+        if (g_rml && !g_cfg.hud_hidden && mouse && (free || release) && !RmlWin32::WindowProcedure(g_rml, g_ime, h, m, w, l)) return 0;
         if (!free) return 0;
     }
     return DefWindowProcW(h, m, w, l);
@@ -392,7 +397,7 @@ void render_frame() {
     g_ctx->OMSetRenderTargets(1, &g_rtv, nullptr);
     g_ctx->ClearRenderTargetView(g_rtv, clear);
     g_renderer->BeginFrame();
-    g_rml->Render();
+    if (!g_cfg.hud_hidden) g_rml->Render();  // still synced while hidden, so toasts expire
     g_menu_ctx->Render();  // on top of the HUD
     g_renderer->EndFrame(g_rtv);
     g_swapchain->Present(0, 0);  // no vsync: never contend with the game's swapchain
@@ -531,6 +536,10 @@ void stop() {
 
 void toggle_menu() {
     if (g_ready.load() && g_hwnd) PostMessageW(g_hwnd, WM_YAP_TOGGLE, 0, 0);
+}
+
+void toggle_hud() {
+    if (g_ready.load() && g_hwnd) PostMessageW(g_hwnd, WM_YAP_HIDE, 0, 0);
 }
 
 }  // namespace yap::overlay
