@@ -2,6 +2,10 @@
 
 Each release gets a `## <version>` section; CI copies the one matching `shared/version.h` into the GitHub Release notes. Add entries under `Unreleased` as you go, then rename it to the version when you bump.
 
+## 0.4.1 - 2026-09-27
+
+- ReShade no longer applies its effects to the overlay. Some presets turned the whole screen black until you alt-tabbed.
+
 ## 0.4.0 - 2026-09-23
 
 - HOME hides or shows the overlay; also a checkbox on the Status tab. Saved with the rest of the settings.

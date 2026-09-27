@@ -49,6 +49,7 @@ IDXGISwapChain1* g_swapchain = nullptr;
 IDCompositionDevice* g_dcomp = nullptr;
 IDCompositionTarget* g_dcomp_target = nullptr;
 IDCompositionVisual* g_dcomp_visual = nullptr;
+ID3D11Texture2D* g_target = nullptr;
 ID3D11RenderTargetView* g_rtv = nullptr;
 UINT g_width = 0, g_height = 0;
 
@@ -111,12 +112,19 @@ void release(T*& p) {
     }
 }
 
+// We draw into g_target and copy it to the back buffer at present: the swapchain has no
+// render-target usage (see create_device_unguarded), so its buffers can't be bound directly.
 bool create_rtv() {
-    ID3D11Texture2D* back = nullptr;
-    if (FAILED(g_swapchain->GetBuffer(0, IID_PPV_ARGS(&back))) || !back) return false;
-    HRESULT hr = g_device->CreateRenderTargetView(back, nullptr, &g_rtv);
-    back->Release();
-    return SUCCEEDED(hr) && g_rtv;
+    D3D11_TEXTURE2D_DESC td{};
+    td.Width = g_width;
+    td.Height = g_height;
+    td.MipLevels = 1;
+    td.ArraySize = 1;
+    td.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    td.SampleDesc.Count = 1;
+    td.BindFlags = D3D11_BIND_RENDER_TARGET;
+    if (FAILED(g_device->CreateTexture2D(&td, nullptr, &g_target)) || !g_target) return false;
+    return SUCCEEDED(g_device->CreateRenderTargetView(g_target, nullptr, &g_rtv)) && g_rtv;
 }
 
 // A DLL from System32 by absolute path. ReShade installs itself as a proxy dxgi.dll and ENB
@@ -163,7 +171,11 @@ bool create_device_unguarded(HWND hwnd, UINT w, UINT h) {
         sd.Height = h;
         sd.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
         sd.SampleDesc.Count = 1;
-        sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        // Not RENDER_TARGET_OUTPUT: ReShade hooks the System32 exports too, so the bypass above
+        // doesn't keep it off this device, and it would run the user's preset on our Present
+        // (presets that write alpha 1 turned the whole overlay opaque black). ReShade skips
+        // any swap chain without that flag; create_rtv/render_frame copy into it instead.
+        sd.BufferUsage = DXGI_USAGE_SHADER_INPUT;
         sd.BufferCount = 2;
         sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
         sd.AlphaMode = DXGI_ALPHA_MODE_PREMULTIPLIED;
@@ -199,6 +211,7 @@ bool create_device(HWND hwnd, UINT w, UINT h) {
 
 void destroy_device() {
     release(g_rtv);
+    release(g_target);
     release(g_dcomp_visual);
     release(g_dcomp_target);
     release(g_dcomp);
@@ -375,6 +388,7 @@ void track_game_window() {
     SetWindowPos(g_hwnd, HWND_TOPMOST, r.left, r.top, w, h, SWP_NOACTIVATE);
     if ((w != g_width || h != g_height) && w && h) {
         release(g_rtv);
+        release(g_target);
         if (SUCCEEDED(g_swapchain->ResizeBuffers(0, w, h, DXGI_FORMAT_UNKNOWN, 0))) {
             g_width = w;
             g_height = h;
@@ -414,6 +428,10 @@ void render_frame() {
     if (!g_cfg.hud_hidden) g_rml->Render();  // still synced while hidden, so toasts expire
     g_menu_ctx->Render();  // on top of the HUD
     g_renderer->EndFrame(g_rtv);
+    ID3D11Texture2D* back = nullptr;
+    if (FAILED(g_swapchain->GetBuffer(0, IID_PPV_ARGS(&back))) || !back) return;
+    g_ctx->CopyResource(back, g_target);
+    back->Release();
     g_swapchain->Present(0, 0);  // no vsync: never contend with the game's swapchain
 }
 
