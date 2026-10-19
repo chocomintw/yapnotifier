@@ -175,11 +175,19 @@ bool create_device_unguarded(HWND hwnd, UINT w, UINT h) {
         // doesn't keep it off this device, and it would run the user's preset on our Present
         // (presets that write alpha 1 turned the whole overlay opaque black). ReShade skips
         // any swap chain without that flag; create_rtv/render_frame copy into it instead.
-        sd.BufferUsage = DXGI_USAGE_SHADER_INPUT;
         sd.BufferCount = 2;
         sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
         sd.AlphaMode = DXGI_ALPHA_MODE_PREMULTIPLIED;
-        hr = factory->CreateSwapChainForComposition(dxgi, &sd, nullptr, &g_swapchain);
+        // Some drivers/mods reject the flag-less usages with DXGI_ERROR_INVALID_CALL (0.4.1/0.4.2
+        // crashed the overlay for them); the last entry is the plain flag that always works,
+        // we render offscreen either way, so it only costs the ReShade skip.
+        const UINT usages[] = {DXGI_USAGE_SHADER_INPUT, 0, DXGI_USAGE_RENDER_TARGET_OUTPUT};
+        for (const UINT usage : usages) {
+            sd.BufferUsage = usage;
+            hr = factory->CreateSwapChainForComposition(dxgi, &sd, nullptr, &g_swapchain);
+            if (SUCCEEDED(hr)) break;
+            log::info("overlay: swapchain usage {:#x} failed ({:#x})", usage, static_cast<unsigned>(hr));
+        }
     }
     if (SUCCEEDED(hr)) hr = DCompositionCreateDevice(dxgi, IID_PPV_ARGS(&g_dcomp));
     if (SUCCEEDED(hr)) hr = g_dcomp->CreateTargetForHwnd(hwnd, TRUE, &g_dcomp_target);
