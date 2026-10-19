@@ -2,6 +2,10 @@
 
 Each release gets a `## <version>` section; CI copies the one matching `shared/version.h` into the GitHub Release notes. Add entries under `Unreleased` as you go, then rename it to the version when you bump.
 
+## 0.4.4 - 2026-10-19
+
+- Fixed the overlay not starting when GTAVUpscaler is installed (it hooks D3D11CreateDevice and broke device creation). Also logs each device-creation attempt for diagnosis.
+
 ## 0.4.3 - 2026-10-19
 
 - Fixed the overlay not appearing on some systems (swapchain setup failed with 0x887a0001 in 0.4.1/0.4.2). Update from 0.4.2 installs automatically.
