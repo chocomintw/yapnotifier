@@ -153,8 +153,41 @@ bool create_device_unguarded(HWND hwnd, UINT w, UINT h) {
         return false;
     }
     D3D_FEATURE_LEVEL levels[] = {D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_0};
-    HRESULT hr = create_d3d11(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, levels, 2,
-                              D3D11_SDK_VERSION, &g_device, nullptr, &g_ctx);
+    // A GPU or mod that rejects the feature-level list (or hardware outright) still gets an overlay
+    // from the fallbacks; WARP is slow but the HUD is tiny.
+    HRESULT hr = E_FAIL;
+    {
+        wchar_t path[MAX_PATH] = {};
+        GetModuleFileNameW(real_d3d11, path, MAX_PATH);
+        log::info("overlay: d3d11 module {}", std::filesystem::path(path).string());
+    }
+    // 0: as before; 1: a single level; 2: no BGRA flag (not needed for a swap chain); 3: WARP.
+    // GTAVUpscaler detours D3D11CreateDevice and swaps in its own one-entry level array but keeps our
+    // count, so any count != 1 fails there (E_INVALIDARG / UNSUPPORTED); a count of 1 survives it.
+    for (int attempt = 0; attempt < 4 && FAILED(hr); ++attempt) {
+        hr = create_d3d11(nullptr, attempt == 3 ? D3D_DRIVER_TYPE_WARP : D3D_DRIVER_TYPE_HARDWARE, nullptr,
+                          attempt < 2 ? D3D11_CREATE_DEVICE_BGRA_SUPPORT : 0, levels, attempt == 0 ? 2 : 1,
+                          D3D11_SDK_VERSION, &g_device, nullptr, &g_ctx);
+        if (FAILED(hr)) log::info("overlay: D3D11CreateDevice attempt {} failed: {:#x}", attempt, static_cast<unsigned>(hr));
+    }
+    // Last resort: name each adapter explicitly instead of letting D3D pick the default one.
+    if (FAILED(hr)) {
+        IDXGIFactory1* f1 = nullptr;
+        if (SUCCEEDED(create_factory(0, IID_PPV_ARGS(&f1)))) {
+            IDXGIAdapter* a = nullptr;
+            for (UINT i = 0; FAILED(hr) && f1->EnumAdapters(i, &a) == S_OK; ++i) {
+                DXGI_ADAPTER_DESC ad{};
+                a->GetDesc(&ad);
+                hr = create_d3d11(a, D3D_DRIVER_TYPE_UNKNOWN, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION, &g_device,
+                                  nullptr, &g_ctx);
+                log::info("overlay: adapter {} vendor {:#x} device {:#x}: {:#x}", i, ad.VendorId, ad.DeviceId,
+                          static_cast<unsigned>(hr));
+                release(a);
+            }
+            release(f1);
+        }
+    }
+    if (FAILED(hr)) return false;
     IDXGIDevice* dxgi = nullptr;
     IDXGIFactory2* factory = nullptr;
     IDXGIAdapter* adapter = nullptr;
@@ -163,6 +196,12 @@ bool create_device_unguarded(HWND hwnd, UINT w, UINT h) {
     // CreateDXGIFactory2 is what faulted inside ReShade's dxgi for tsro.
     if (SUCCEEDED(hr)) hr = dxgi->GetAdapter(&adapter);
     if (SUCCEEDED(hr)) hr = adapter->GetParent(IID_PPV_ARGS(&factory));
+    if (adapter) {
+        DXGI_ADAPTER_DESC ad{};
+        adapter->GetDesc(&ad);
+        log::info("overlay: adapter vendor {:#x} device {:#x}, feature level {:#x}", ad.VendorId, ad.DeviceId,
+                  static_cast<unsigned>(g_device->GetFeatureLevel()));
+    }
     release(adapter);
     if (FAILED(hr)) hr = create_factory(0, IID_PPV_ARGS(&factory));
     if (SUCCEEDED(hr)) {
@@ -182,11 +221,17 @@ bool create_device_unguarded(HWND hwnd, UINT w, UINT h) {
         // crashed the overlay for them); the last entry is the plain flag that always works,
         // we render offscreen either way, so it only costs the ReShade skip.
         const UINT usages[] = {DXGI_USAGE_SHADER_INPUT, 0, DXGI_USAGE_RENDER_TARGET_OUTPUT};
-        for (const UINT usage : usages) {
-            sd.BufferUsage = usage;
-            hr = factory->CreateSwapChainForComposition(dxgi, &sd, nullptr, &g_swapchain);
+        const DXGI_SWAP_EFFECT effects[] = {DXGI_SWAP_EFFECT_FLIP_DISCARD, DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL};
+        for (const DXGI_SWAP_EFFECT effect : effects) {
+            sd.SwapEffect = effect;
+            for (const UINT usage : usages) {
+                sd.BufferUsage = usage;
+                hr = factory->CreateSwapChainForComposition(dxgi, &sd, nullptr, &g_swapchain);
+                if (SUCCEEDED(hr)) break;
+                log::info("overlay: swapchain effect {} usage {:#x} failed ({:#x}) at {}x{}", static_cast<int>(effect),
+                          usage, static_cast<unsigned>(hr), w, h);
+            }
             if (SUCCEEDED(hr)) break;
-            log::info("overlay: swapchain usage {:#x} failed ({:#x})", usage, static_cast<unsigned>(hr));
         }
     }
     if (SUCCEEDED(hr)) hr = DCompositionCreateDevice(dxgi, IID_PPV_ARGS(&g_dcomp));
