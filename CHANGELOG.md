@@ -2,11 +2,11 @@
 
 Each release gets a `## <version>` section; CI copies the one matching `shared/version.h` into the GitHub Release notes. Add entries under `Unreleased` as you go, then rename it to the version when you bump.
 
-## 0.4.1 - 2026-09-27
 ## 0.4.3 - 2026-10-19
 
 - Fixed the overlay not appearing on some systems (swapchain setup failed with 0x887a0001 in 0.4.1/0.4.2). Update from 0.4.2 installs automatically.
 
+## 0.4.1 - 2026-09-27
 
 - ReShade no longer applies its effects to the overlay. Some presets turned the whole screen black until you alt-tabbed.
 
