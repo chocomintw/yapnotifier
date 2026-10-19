@@ -180,6 +180,14 @@ bool create_device_unguarded(HWND hwnd, UINT w, UINT h) {
         sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
         sd.AlphaMode = DXGI_ALPHA_MODE_PREMULTIPLIED;
         hr = factory->CreateSwapChainForComposition(dxgi, &sd, nullptr, &g_swapchain);
+        if (FAILED(hr)) {
+            // Some graphics mods reject the flag-less swap chain with DXGI_ERROR_INVALID_CALL;
+            // the usual flag still works since we render offscreen anyway.
+            log::info("overlay: swapchain without render-target usage failed ({:#x}), retrying with it",
+                      static_cast<unsigned>(hr));
+            sd.BufferUsage |= DXGI_USAGE_RENDER_TARGET_OUTPUT;
+            hr = factory->CreateSwapChainForComposition(dxgi, &sd, nullptr, &g_swapchain);
+        }
     }
     if (SUCCEEDED(hr)) hr = DCompositionCreateDevice(dxgi, IID_PPV_ARGS(&g_dcomp));
     if (SUCCEEDED(hr)) hr = g_dcomp->CreateTargetForHwnd(hwnd, TRUE, &g_dcomp_target);
